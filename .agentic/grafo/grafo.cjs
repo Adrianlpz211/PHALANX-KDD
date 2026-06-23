@@ -1602,3 +1602,143 @@ if (_args[0] === 'predecir') {
 // Las nuevas tablas se crean automáticamente en el próximo initDB()
 // grafo.cjs ya llama migrateDB() que tiene las ALTER TABLE
 // Solo hay que asegurar que las nuevas tablas de git_context_log, etc. se crean
+
+// ─── v3.1: Migración para AST, Knowledge Base y Bi-temporal ─────────────────
+// Agentic KDD v3.1 — Nuevas tablas y columnas para Fases 1-3
+// Esta función se llama automáticamente en la siguiente ejecución.
+
+function migrateV3_1(db) {
+  // Columnas bi-temporales en relaciones_semanticas
+  const biTemporalMigrations = [
+    "ALTER TABLE relaciones_semanticas ADD COLUMN valid_at TEXT DEFAULT (datetime('now'))",
+    "ALTER TABLE relaciones_semanticas ADD COLUMN invalid_at TEXT",
+    "ALTER TABLE relaciones_semanticas ADD COLUMN expired_at TEXT",
+    "ALTER TABLE relaciones_semanticas ADD COLUMN episode_id TEXT",
+    "ALTER TABLE relaciones_semanticas ADD COLUMN confidence TEXT DEFAULT 'MEDIA'",
+    "ALTER TABLE relaciones_semanticas ADD COLUMN context TEXT",
+    "ALTER TABLE relaciones_semanticas ADD COLUMN source TEXT DEFAULT 'agent'",
+  ];
+  biTemporalMigrations.forEach(sql => { try { db.exec(sql); } catch(e) {} });
+
+  // Índices bi-temporales
+  const biTemporalIndices = [
+    "CREATE INDEX IF NOT EXISTS idx_rel_sem_valid ON relaciones_semanticas(valid_at)",
+    "CREATE INDEX IF NOT EXISTS idx_rel_sem_invalid ON relaciones_semanticas(invalid_at)",
+    "CREATE INDEX IF NOT EXISTS idx_rel_sem_type ON relaciones_semanticas(tipo)",
+  ];
+  biTemporalIndices.forEach(sql => { try { db.exec(sql); } catch(e) {} });
+
+  // Tabla AST Symbols
+  const astSymbolsSQL = `
+    CREATE TABLE IF NOT EXISTS ast_symbols (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      file         TEXT NOT NULL,
+      language     TEXT NOT NULL,
+      symbol_name  TEXT NOT NULL,
+      kind         TEXT NOT NULL,
+      line_start   INTEGER DEFAULT 0,
+      line_end     INTEGER DEFAULT 0,
+      exported     INTEGER DEFAULT 0,
+      signature    TEXT,
+      pagerank     REAL DEFAULT 0.0,
+      last_indexed TEXT DEFAULT (datetime('now')),
+      content_hash TEXT
+    )`;
+  try { db.exec(astSymbolsSQL); } catch(e) {}
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_ast_sym_uniq ON ast_symbols(file, symbol_name, kind)"); } catch(e) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_ast_sym_file ON ast_symbols(file)"); } catch(e) {}
+
+  // Tabla AST Edges
+  const astEdgesSQL = `
+    CREATE TABLE IF NOT EXISTS ast_edges (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_file    TEXT NOT NULL,
+      to_file      TEXT,
+      from_symbol  TEXT,
+      to_symbol    TEXT,
+      kind         TEXT NOT NULL,
+      weight       REAL DEFAULT 1.0,
+      pagerank_src REAL DEFAULT 0.0,
+      last_indexed TEXT DEFAULT (datetime('now'))
+    )`;
+  try { db.exec(astEdgesSQL); } catch(e) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_ast_edge_from ON ast_edges(from_file)"); } catch(e) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_ast_edge_to ON ast_edges(to_file)"); } catch(e) {}
+
+  // Tabla Knowledge Docs (ADRs, gotchas, convenciones)
+  const knowledgeDocsSQL = `
+    CREATE TABLE IF NOT EXISTS knowledge_docs (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id          TEXT NOT NULL UNIQUE,
+      tipo            TEXT NOT NULL,
+      titulo          TEXT NOT NULL,
+      status          TEXT DEFAULT 'accepted',
+      fecha           TEXT,
+      decision_makers TEXT DEFAULT '[]',
+      afecta          TEXT DEFAULT '[]',
+      frontmatter     TEXT DEFAULT '{}',
+      contenido       TEXT,
+      context         TEXT,
+      decision        TEXT,
+      consequences    TEXT,
+      options         TEXT DEFAULT '[]',
+      file_path       TEXT,
+      last_indexed    TEXT DEFAULT (datetime('now')),
+      content_hash    TEXT
+    )`;
+  try { db.exec(knowledgeDocsSQL); } catch(e) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_kdocs_tipo ON knowledge_docs(tipo)"); } catch(e) {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_kdocs_status ON knowledge_docs(status)"); } catch(e) {}
+
+  // campo gate_result en fases (para harness tracking)
+  try { db.exec("ALTER TABLE fases ADD COLUMN gate_result TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE fases ADD COLUMN harness_passed INTEGER DEFAULT 0"); } catch(e) {}
+
+  // campo ast_indexed en ciclos
+  try { db.exec("ALTER TABLE ciclos ADD COLUMN ast_indexed INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE ciclos ADD COLUMN knowledge_loaded INTEGER DEFAULT 0"); } catch(e) {}
+}
+
+// Auto-run migrateV3_1 when grafo.cjs is first loaded
+(function autoMigrateV3_1() {
+  try {
+    const _dbForMigration = initDB();
+    migrateV3_1(_dbForMigration);
+    if (_dbForMigration.save) _dbForMigration.save();
+    _dbForMigration.close();
+  } catch(e) {
+    // Silent — migration runs opportunistically
+  }
+})();
+
+// Export migrateV3_1
+const _exportsV31 = module.exports || {};
+module.exports = { ..._exportsV31, migrateV3_1 };
+
+
+// ─── v3.2: Vigencia de Memoria + Verdad Vigente ────────────────────────────
+// Cierra el Gap #1: límite claro entre memoria vigente, histórica y evidencia
+
+function migrateV3_2(db) {
+  // Columna vigencia_tipo en nodos
+  try { db.exec("ALTER TABLE nodos ADD COLUMN vigencia_tipo TEXT DEFAULT 'VIGENTE'"); } catch {}
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_nodos_vigencia ON nodos(vigencia_tipo)"); } catch {}
+  // Inferir vigencia_tipo para registros existentes
+  try {
+    db.exec("UPDATE nodos SET vigencia_tipo='OBSOLETO' WHERE estado='OBSOLETO' AND vigencia_tipo='VIGENTE'");
+    db.exec("UPDATE nodos SET vigencia_tipo='HISTORICO' WHERE estado='CONSOLIDADO' AND vigencia_tipo='VIGENTE'");
+  } catch {}
+}
+
+// Auto-run
+(function autoMigrateV3_2() {
+  try {
+    const _db = initDB();
+    migrateV3_2(_db);
+    if (_db.save) _db.save();
+    _db.close();
+  } catch {}
+})();
+
+const _exportsV32 = module.exports || {};
+module.exports = { ..._exportsV32, migrateV3_2 };

@@ -411,3 +411,93 @@ Log:           ✓ _output/log-[mes].md
 ✅ CICLO COMPLETO: [descripción]
 Para la siguiente: aa: [instrucción sugerida]
 ```
+
+---
+
+## v3.1 — REGISTRAR GATE RESULTS Y EDGES CAUSALES
+
+### Registrar gate_result por fase (OBLIGATORIO)
+
+Al registrar el ciclo, incluir el resultado del harness por cada fase:
+```javascript
+// En _ciclo_tmp.json → campo fases, agregar gate_result:
+fases: [
+  {
+    num: 1, nombre: "Analista", agente: "analista",
+    estado: "COMPLETADO",
+    gate_result: "PASS",   // PASS | BLOCK | RETRY
+    harness_passed: true,
+    intentos: 1,
+    ...
+  },
+  {
+    num: 4, nombre: "TDD",
+    gate_result: "PASS",
+    harness_passed: true,
+    // Si hubo healing:
+    healing_iterations: 2,
+    healing_details: "AssertionError en test X → fix aplicado en src/Y.ts"
+  }
+]
+```
+
+### Registrar edges causales si hubo self-healing
+
+Si el TDD gate requirió más de 1 iteración, registrar:
+```bash
+# El fallo que se resolvió
+node .agentic/grafo/causal-edges.cjs add caused_failure [archivo-problemático] [módulo] "[descripción]"
+# El fix que funcionó
+node .agentic/grafo/causal-edges.cjs add was_fixed_by [archivo-problemático] "[fix-aplicado]"
+# Tests que cubren el área
+node .agentic/grafo/causal-edges.cjs add tested_by [archivo-fuente] [archivo-test]
+```
+
+### Invalidar edges obsoletos (bi-temporal)
+
+Si una decisión o restricción cambió en este ciclo:
+```bash
+# Primero ver el edge obsoleto
+node .agentic/grafo/causal-edges.cjs query caused_failure
+# Invalidar (no borra — preserva historial)
+node .agentic/grafo/causal-edges.cjs invalidate [id] "razón del cambio"
+```
+
+### Sincronizar knowledge base si hubo cambios en docs/adr
+
+Si en este ciclo se crearon o modificaron ADRs:
+```bash
+node .agentic/grafo/adr-ingestor.cjs ingest
+node .agentic/grafo/knowledge-ingestor.cjs ingest
+```
+
+
+---
+
+## v3.2 — AUDITORÍA DE MEMORIA Y OBSERVABILIDAD
+
+### Al terminar cada ciclo, verificar audit status
+
+```bash
+# Health check rápido del sistema
+node .agentic/grafo/health-check.cjs
+
+# Si hay stale o contradicciones > 20:
+node .agentic/grafo/memory-audit.cjs report
+```
+
+### Registrar trail de decisión
+```bash
+# Ver el trail del ciclo que terminó
+node .agentic/grafo/decision-trail.cjs recent 1
+
+# Si alguien pregunta "¿por qué está X?":
+node .agentic/grafo/decision-trail.cjs why "[módulo o archivo]"
+```
+
+### Métricas al final del sprint (no en cada ciclo)
+```bash
+# Ejecutar al terminar un sprint completo (no en cada aa:)
+node .agentic/grafo/metrics.cjs summary
+```
+

@@ -273,3 +273,105 @@ module.exports = {
   MODELO,
   DIM
 };
+
+// ─── v3.1: EMBEDDINGS JINA OPT-IN ────────────────────────────────────────────
+// jinaai/jina-embeddings-v2-base-code
+// Ventajas sobre MiniLM: entrenado en código (30+ lenguajes), 8192 ctx tokens
+// Activar en config.md: embeddings_model: jina-code
+// Requiere: npm install @xenova/transformers (ya instalado) — modelo ~500MB
+
+const JINA_CODE_MODEL = 'jinaai/jina-embeddings-v2-base-code';
+const JINA_CODE_DIM = 768;
+
+let _jinaAvailable = null;
+let _jinaPipeline = null;
+
+/**
+ * Verifica si el modelo jina-v2-code está disponible en caché local.
+ * No descarga automáticamente — el usuario debe optar in explícitamente.
+ */
+function isJinaAvailable() {
+  if (_jinaAvailable !== null) return _jinaAvailable;
+  // Solo disponible si hay caché local del modelo
+  const cacheDirs = [
+    path.join(process.cwd(), '.agentic', '.model_cache', 'jinaai', 'jina-embeddings-v2-base-code'),
+    path.join(require('os').homedir(), '.cache', 'huggingface', 'hub', 'models--jinaai--jina-embeddings-v2-base-code'),
+  ];
+  _jinaAvailable = cacheDirs.some(d => fs.existsSync(d));
+  return _jinaAvailable;
+}
+
+/**
+ * Genera embedding con jina-v2-code si está disponible.
+ * Fallback automático a MiniLM si no está en caché.
+ */
+async function embedCode(text) {
+  // Leer preferencia de config.md
+  const configPath = path.join(process.cwd(), '.agentic', 'config.md');
+  const useJina = fs.existsSync(configPath) &&
+    fs.readFileSync(configPath, 'utf8').includes('embeddings_model: jina-code');
+
+  if (useJina && isJinaAvailable()) {
+    try {
+      if (!_jinaPipeline) {
+        const { pipeline } = require('@xenova/transformers');
+        _jinaPipeline = await pipeline('feature-extraction', JINA_CODE_MODEL, { truncation: true });
+      }
+      const out = await _jinaPipeline(text, { pooling: 'mean', normalize: true });
+      return Array.from(out.data);
+    } catch(e) {
+      // Fallback a MiniLM silencioso
+    }
+  }
+
+  // Fallback: MiniLM estándar
+  return embed(text);
+}
+
+/**
+ * Descarga el modelo jina-v2-code al caché local.
+ * Ejecutar manualmente: node .agentic/grafo/embeddings.cjs install-jina
+ */
+async function installJinaCode() {
+  if (!isAvailable()) {
+    console.log('Error: @xenova/transformers no instalado. Ejecutar: npm install @xenova/transformers');
+    return;
+  }
+  console.log(`Descargando ${JINA_CODE_MODEL} (~500MB)...`);
+  console.log('Este proceso puede tomar varios minutos.');
+  try {
+    const { pipeline, env } = require('@xenova/transformers');
+    const localCache = path.join(process.cwd(), '.agentic', '.model_cache');
+    fs.mkdirSync(localCache, { recursive: true });
+    env.cacheDir = localCache;
+    await pipeline('feature-extraction', JINA_CODE_MODEL);
+    _jinaAvailable = true;
+    console.log(`✅ ${JINA_CODE_MODEL} instalado en ${localCache}`);
+    console.log('Para activar: agregar "embeddings_model: jina-code" en .agentic/config.md');
+  } catch(e) {
+    console.error('Error descargando modelo:', e.message);
+  }
+}
+
+// Exportar nuevas funciones
+const _prevExports = module.exports || {};
+module.exports = {
+  ..._prevExports,
+  embedCode,
+  isJinaAvailable,
+  installJinaCode,
+  JINA_CODE_MODEL,
+  JINA_CODE_DIM,
+};
+
+// CLI
+if (require.main === module) {
+  const [,, cmd] = process.argv;
+  if (cmd === 'install-jina') {
+    installJinaCode().catch(console.error);
+  } else if (cmd === 'status') {
+    console.log(`MiniLM disponible: ${isAvailable()}`);
+    console.log(`Jina-code disponible: ${isJinaAvailable()}`);
+  }
+}
+

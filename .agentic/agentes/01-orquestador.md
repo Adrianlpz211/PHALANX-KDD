@@ -348,3 +348,71 @@ node -e "const {registrarCiclo}=require('./.agentic/grafo/grafo.cjs');const d=re
 
 **El agente Memoria SIEMPRE usa este método — nunca pasar JSON directo en la línea de comandos.**
 **Esto funciona en PowerShell, CMD, bash y cualquier terminal.**
+
+---
+
+## HARNESS v3.1 — enforcement determinista (OBLIGATORIO)
+
+> El harness convierte "el agente dice que cumplió" en "el sistema verificó que cumplió".
+> Sin harness, el pipeline aa: es probabilístico. Con harness, es determinista.
+
+### Reglas de inyección por paso
+
+Antes de ejecutar CADA paso, inyectar las reglas correspondientes desde:
+```
+.agentic/agentes/harness-rules.md → sección correspondiente al paso
+```
+
+### Gate TDD — OBLIGATORIO en paso 4
+
+⛔ **NUNCA** marcar TDD como completado sin ejecutar:
+```bash
+node .agentic/grafo/tdd-gate.cjs run [área]
+```
+
+El gate.cjs es el árbitro final. Si retorna exit code 1 → STOP.
+El agente NO puede declarar "tests pasando" sin evidencia del gate.
+
+### Gate QA — OBLIGATORIO en paso 5
+
+QA no es opinión del agente. Output requerido verificable:
+```
+{ acceptance_criteria_checked: true, full_suite_passed: true, qa_verdict: "PASS" }
+```
+
+### Pre-check de impacto — ANTES de planificar
+
+Antes de planificar cualquier cambio, verificar impacto:
+```bash
+node .agentic/grafo/impact-analyzer.cjs precheck [módulo]
+```
+Si severidad = ALTO → crear Bugfix Spec antes de proceder.
+
+### Spec-first — SIEMPRE verificar/crear spec
+
+```bash
+node .agentic/grafo/spec-manager.cjs status [módulo]
+```
+Si no existe spec → crear con `spec-manager.cjs create [módulo]`
+Si existe spec → leer waves: `spec-manager.cjs waves [módulo]`
+
+### Consulta Knowledge Base
+
+Antes de planificar, consultar ADRs y gotchas:
+```bash
+node .agentic/grafo/adr-ingestor.cjs query [módulo]
+node .agentic/grafo/knowledge-ingestor.cjs query [módulo]
+```
+
+### Scope Deviation Check
+
+Antes de ejecutar implementación, verificar scope:
+```javascript
+// El Orquestador verifica que los archivos que el agente propone tocar
+// están en la lista allowed_files del plan.
+// Si no → STOP antes de actuar.
+const { checkScopeDeviation } = require('.agentic/grafo/harness.cjs');
+const result = checkScopeDeviation(proposed_files, allowed_files);
+if (!result.ok) STOP(result.reason);
+```
+

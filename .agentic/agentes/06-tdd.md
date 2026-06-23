@@ -236,3 +236,49 @@ Regresiones que no se pueden resolver:
 → STOP — el fix rompió algo más complejo
   Describir exactamente qué rompió y en qué archivo
 ```
+
+---
+
+## v3.1 — GATE MECÁNICO (REEMPLAZA LA INSTRUCCIÓN MARKDOWN)
+
+> El self-healing ya no es una instrucción — es un MCP tool en código Node.js.
+> El agente NO puede declarar que TDD pasó sin ejecutar este gate.
+
+### Ejecutar el loop mecánico
+
+```bash
+# El gate detecta el comando de tests, encuentra los archivos, ejecuta,
+# parsea el resultado, itera (máx 3 veces) y reporta.
+node .agentic/grafo/tdd-gate.cjs run [área]
+
+# Verificar tests detectados (pre-check)
+node .agentic/grafo/tdd-gate.cjs find
+
+# Si el gate reporta exit code 1 → STOP obligatorio con reporte exacto.
+```
+
+### Lo que hace el gate (no el agente)
+
+1. `detectTestCommand()` — detecta npm test / vitest / jest automáticamente
+2. `findTestFiles()` — encuentra todos los archivos de test relevantes
+3. `runTests()` — ejecuta con `sh -c "comando 2>&1"` y captura el output
+4. `parseTestOutput()` — parsea Jest/Vitest/Mocha/pytest sin interpretación del LLM
+5. Si `allPassed === false` → devuelve señal de retry con failures exactos
+6. Loop máx 3 iteraciones → si no pasa → exit code 1 → STOP
+
+### Señal de healing al agente
+
+El gate NO arregla el código por sí solo. Lo que hace es:
+- Comunicar exactamente QUÉ test falló y por qué (output estructurado)
+- El agente recibe esa señal y aplica el fix
+- El agente vuelve a ejecutar `node .agentic/grafo/tdd-gate.cjs run`
+- Si después de 3 veces sigue fallando → STOP
+
+### Registrar edge causal si hubo healing
+
+Si el loop resolvió un fallo, registrar edge causal:
+```bash
+node .agentic/grafo/causal-edges.cjs add caused_failure [archivo] [módulo] "descripción del bug"
+node .agentic/grafo/causal-edges.cjs add was_fixed_by [archivo] [fix-aplicado]
+```
+
