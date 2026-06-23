@@ -1,281 +1,329 @@
 <div align="center">
 
-# 🤖 Agentic KDD
+<br/>
 
-**Un desarrollador. La capacidad de un departamento.**
+# ⚔️ Agentic KDD
 
-*Autonomous development pipeline con memoria persistente, enforcement mecánico y 23 MCP tools nativas*
+### An army of one.
+**One developer. The output of a full team.**  
+*When you're ready to call for backup — a legion.*
 
-[![npm version](https://img.shields.io/npm/v/agentic-kdd?color=8b5cf6&style=flat-square)](https://www.npmjs.com/package/agentic-kdd)
-[![npm version](https://img.shields.io/npm/v/agentic-kdd-mcp?color=3b82f6&label=mcp&style=flat-square)](https://www.npmjs.com/package/agentic-kdd-mcp)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+<br/>
+
+[![npm](https://img.shields.io/npm/v/agentic-kdd?color=8b5cf6&style=flat-square&label=agentic-kdd)](https://www.npmjs.com/package/agentic-kdd)
+[![mcp](https://img.shields.io/npm/v/agentic-kdd-mcp?color=3b82f6&style=flat-square&label=agentic-kdd-mcp)](https://www.npmjs.com/package/agentic-kdd-mcp)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
-[![Cursor](https://img.shields.io/badge/Cursor-compatible-blue?style=flat-square)](https://cursor.sh)
-[![Claude Code](https://img.shields.io/badge/Claude_Code-compatible-orange?style=flat-square)](https://claude.ai/code)
+[![Cursor](https://img.shields.io/badge/Cursor-ready-0ea5e9?style=flat-square)](https://cursor.sh)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-ready-f97316?style=flat-square)](https://claude.ai/code)
 
 </div>
 
 ---
 
-## ¿Qué es Agentic KDD?
+Most AI coding tools are assistants. They help you think faster, autocomplete your thoughts, answer questions.
 
-Agentic KDD (Knowledge-Driven Development) es un framework de desarrollo con IA que vive **dentro de tu proyecto** — no en la nube, no en un SaaS externo. Un directorio `.agentic/` con código Node.js + una base de datos SQLite que aprende con cada ciclo de trabajo.
+Agentic KDD is not an assistant.
 
-La diferencia fundamental con cualquier otro asistente de IA:
+It's the architect who remembers every design decision. The QA engineer who never lets untested code through. The tech lead who knows every dependency in the codebase. The senior who learned from every past mistake. The PM who keeps the spec current after every cycle.
 
-> **Sin Agentic KDD:** el agente olvida todo al cerrar el chat. Cada sesión empieza desde cero.  
-> **Con Agentic KDD:** el agente recuerda cada error, conoce cada dependencia, entiende cada decisión de diseño, y verifica mecánicamente que el trabajo esté hecho antes de marcarlo como completado.
+All of them. Inside your project. Every time you type `aa:`.
 
+```bash
+aa: implement JWT authentication with refresh tokens
 ```
-aa: implementar autenticación con JWT
-```
-*Y el agente ejecuta solo. Sin interrupciones. Con memoria real.*
+
+*No interruptions. No context loss. No "can you remind me what we decided?"*
 
 ---
 
-## Métricas de rendimiento
+## Solo → Army of One
+
+A single developer with Agentic KDD doesn't work like a developer with a smart autocomplete. They work like a **deployment-ready team** — because the system carries what a team would normally carry:
 
 ```
-Autonomía del agente
-────────────────────────────────────────────────────────────
-Base (sin framework)     ████░░░░░░░░░░░░░░░░░░░░░░  20%
-Con Agentic v2           ████████░░░░░░░░░░░░░░░░░░  40%
-+ Harness (Fase 0)       ████████████░░░░░░░░░░░░░░  58%
-+ AST + Causal (Fase 1)  ██████████████░░░░░░░░░░░░  70%
-+ Knowledge (Fase 2)     ████████████████░░░░░░░░░░  80%
-+ Specs + Impact (Fase 3)█████████████████████████░  95%
+Without Agentic KDD            With Agentic KDD
+───────────────────────        ─────────────────────────────────────────
+You remember what you          The system remembers everything.
+worked on last week.           Every error. Every decision. Every fix.
 
-Reducción de tokens
-────────────────────────────────────────────────────────────
-Tarea corta (fix/feature)        Sin Agentic: ~8K  → Con v3: ~2K   (−4×)
-Tarea larga (feature completo)   Sin Agentic: ~80K → Con v3: ~8K   (−10×)
-Proyecto grande (50K+ líneas)    Sin Agentic: ~120K→ Con v3: ~8K   (−15×)
+You explore the codebase       The AST graph knows every dependency
+before touching anything.      before you write a single line.
 
-Fuente: Codebase-Memory arXiv 2603.27277 (2026) — 83% calidad con 10× menos tokens
+You hope the agent ran         The harness gate blocks the step until
+the tests it said it did.      tests are proven passing in code.
+
+You start fresh each           Memory persists. Each cycle builds
+session.                       on everything that came before.
+
+You are one person.            You operate like a full team.
 ```
-
-| Métrica | Valor |
-|---------|-------|
-| Autonomy Score (proyectos con v3 completo) | ~95% |
-| Reducción de tokens promedio | 10–15× |
-| Multiplicador de output por dev | 5–8× |
-| MCP tools disponibles | 23 |
-| Lenguajes soportados (AST) | 12 |
-| Capas de memoria (CoALA v3) | 4 |
 
 ---
 
-## Cómo funciona — el pipeline `aa:`
+## Team → A Legion
 
-Cada instrucción `aa: [tarea]` ejecuta este pipeline **sin interrumpir al usuario**:
+When your team adopts collaborative mode, every developer's local memory syncs to a shared database (via [libSQL / Turso](https://turso.tech)).
+
+```
+Dev A discovers that touching auth.ts breaks session.ts
+                        ↓
+                  [ Turso Sync ]
+                        ↓
+Dev B already knows it — before touching auth.ts
+Dev C already knows it — before touching auth.ts
+Dev N already knows it — from day one on the project
+```
+
+One person's hard lesson becomes the team's permanent knowledge. The architectural decision from January is understood by the developer who joined in March — before they write a line.
+
+```
+One developer  +  Agentic KDD individual    =  An army of one
+A team         +  Agentic KDD collaborative =  A legion
+```
+
+---
+
+## How it works — the `aa:` pipeline
+
+Every `aa: [task]` executes this **without interrupting you**:
 
 ```mermaid
 flowchart TD
-    A["aa: implementar login"] --> B["⓪ Context Guard\nValida scope del proyecto"]
-    B --> C["① Analista\nLee memoria + AST + ADRs + Specs\nPlanifica TODAS las fases"]
-    C --> D["②③ Front / Back\nImplementa dentro del scope"]
-    D --> E["④ TDD + Self-Healing\n🔄 Ejecuta tests → parsea output\n→ itera máx 3 veces automático"]
-    E --> F{"Tests\npasan?"}
-    F -->|Sí| G["⑤ QA\nVerifica criterios de aceptación\nSuite completa"]
-    F -->|No después de 3 iter| H["🛑 STOP con reporte exacto"]
-    G --> I["⑥ ag:review\nValida contra memoria KDD\nautomáticamente"]
-    I --> J["⑦ Memoria\nSync grafo + edges causales\n+ specs + observabilidad"]
-    J --> K["✅ Reporte final al usuario"]
+    A["aa: your task"] --> B["⓪ Context Guard\nValidates project scope"]
+    B --> C["① Analyst\nReads memory · AST · ADRs · Specs\nPlans ALL phases upfront"]
+    C --> D["②③ Front / Back Agent\nImplements within plan scope"]
+    D --> E["④ TDD + Self-Healing\nRuns tests → parses output\n→ iterates up to 3× automatically"]
+    E --> F{"Tests\npassing?"}
+    F -->|Yes| G["⑤ QA Agent\nVerifies acceptance criteria\nFull regression suite"]
+    F -->|No after 3 iter| H["🛑 STOP\nExact failure report"]
+    G --> I["⑥ ag:review\nAuto-validates against KDD memory"]
+    I --> J["⑦ Memory Agent\nSyncs graph · causal edges\n· specs · observability"]
+    J --> K["✅ Final report"]
 ```
 
-**El usuario nunca escribe `ag: test` o `ag: review` — ocurren solos.**
+**The developer never types `ag: test` or `ag: review` — they run automatically.**
 
 ---
 
-## Arquitectura de memoria — CoALA v3
+## Memory Architecture — CoALA v3
 
-Agentic KDD implementa la arquitectura **CoALA (Cognitive Architecture for Language Agents)** adaptada para desarrollo de software, completamente offline en SQLite.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  WORKING MEMORY       Buffer de la sesión activa                │
-│  ─────────────────    "lo que está en el context window ahora"  │
-│                                                                 │
-│  EPISODIC             Trayectorias crudas de lo que ocurrió     │
-│  ─────────────────    "qué se intentó, en qué orden, resultado" │
-│                                                                 │
-│  SEMANTIC             Mapa del proyecto + grafo de entidades    │
-│  ─────────────────    "qué módulos existen, cómo se conectan"   │
-│                                                                 │
-│  PROCEDURAL           Patrones, errores, decisiones             │
-│  ─────────────────    "reglas que el agente aplica siempre"     │
-│                                                                 │
-│  AST GRAPH (v3)       Grafo de símbolos + call graph + PageRank │
-│  CAUSAL EDGES (v3)    caused_failure · was_fixed_by · tested_by │
-│  KNOWLEDGE DOCS (v3)  ADRs + gotchas + convenciones             │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                    .agentic/memoria.db
-                    (SQLite offline, viaja con el proyecto)
-```
-
-### Señales de confianza — cómo aprende el sistema
+Four memory layers, fully offline, in SQLite, living inside your project.
 
 ```
-BAJA   → sugerencia, no forzada
-MEDIA  → se aplica, se menciona en el plan
-ALTA   → regla fija, el agente la aplica siempre sin excepción
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  WORKING        Active session buffer                                │
+│  MEMORY    ──►  "what's in the context window right now"             │
+│                                                                      │
+│  EPISODIC       Raw trajectories of what happened                    │
+│  MEMORY    ──►  "what was tried, in what order, what was the result" │
+│                                                                      │
+│  SEMANTIC       Project entity map + relationship graph              │
+│  MEMORY    ──►  "what modules exist, how they connect"               │
+│                                                                      │
+│  PROCEDURAL     Patterns, errors, decisions                          │
+│  MEMORY    ──►  "rules the agent applies on every cycle"             │
+│                                                                      │
+│  AST GRAPH      Symbols · call graph · imports · PageRank            │
+│  (v3)      ──►  "the complete structural map of the codebase"        │
+│                                                                      │
+│  CAUSAL         caused_failure · was_fixed_by · regressed_by         │
+│  EDGES (v3)──►  "what caused what — never deleted, only invalidated" │
+│                                                                      │
+│  KNOWLEDGE      ADRs · gotchas · conventions                         │
+│  DOCS  (v3)──►  "why things were decided the way they were"          │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+                                │
+                      .agentic/memoria.db
+              (SQLite · offline · ships with your project)
+```
 
-Aplicado ≥ 3 + utilidad ≥ 70%  →  promoción automática a MEDIA
-Aplicado ≥ 7 + utilidad ≥ 80%  →  promoción automática a ALTA
-Sin uso en 60 ciclos            →  degradación automática
+### Confidence signals
+
+```
+LOW    → suggestion, not enforced
+MEDIUM → applied and mentioned in the plan
+HIGH   → fixed rule, applied on every cycle without exception
+
+Applied ≥ 3×  +  utility ≥ 70%  →  auto-promoted to MEDIUM
+Applied ≥ 7×  +  utility ≥ 80%  →  auto-promoted to HIGH
+Unused for 60 cycles             →  auto-degraded (temporal decay)
 ```
 
 ---
 
-## Las 5 fases del sistema
+## Performance
 
-### Fase 0 — Harness: enforcement determinista
+```
+Autonomy by phase
+─────────────────────────────────────────────────────────────────
+No framework               ████░░░░░░░░░░░░░░░░░░░░░░  20%
+Agentic v2 core            ████████░░░░░░░░░░░░░░░░░░  40%
++ Harness        (Phase 0) ████████████░░░░░░░░░░░░░░  58%
++ AST + Causal   (Phase 1) ██████████████░░░░░░░░░░░░  70%
++ Knowledge Base (Phase 2) ████████████████░░░░░░░░░░  80%
++ Specs + Impact (Phase 3) █████████████████████████░  95%
 
-> *"El modelo propone, el harness verifica."*
+Token reduction vs working without persistent memory
+─────────────────────────────────────────────────────────────────
+Short task   (fix / small feature)   ~8K  →  ~2K  tokens   −4×
+Long task    (full feature)          ~80K →  ~8K  tokens  −10×
+Large project  (50K+ lines)          ~120K→  ~8K  tokens  −15×
+```
 
-El harness es la pieza que más falta hace en todos los frameworks de agentes. Sin gates deterministas, el agente puede declarar que completó TDD sin ejecutar un solo test. Con el harness, eso es imposible a nivel de código.
-
-- **`harness.cjs`** → motor PRE/EXEC/POST para los 8 pasos del pipeline. Ningún paso avanza sin que el gate verifique el output.
-- **`tdd-gate.cjs`** → loop mecánico en Node.js: detecta tests, ejecuta, parsea output (Jest/Vitest/Mocha/pytest), itera máx 3 veces, reporta. El agente no puede mentir sobre tests pasando.
-- **`harness-rules.md`** → reglas imperativas ("NUNCA", "PROHIBIDO") re-inyectadas en cada paso.
-
-### Fase 1 — Discernimiento: mapa del código
-
-El agente ve el proyecto completo antes de planificar cualquier cambio.
-
-- **`ast-indexer.cjs`** → grafo AST con tree-sitter (12 lenguajes), fallback regex. Extrae funciones, clases, imports, call graph → SQLite con PageRank estilo Aider.
-- **`causal-edges.cjs`** → memoria causal bi-temporal: `caused_failure`, `was_fixed_by`, `tested_by`, `regressed_by`. Nunca se borran — se invalidan.
-
-### Fase 2 — Base de conocimiento: el agente entiende el "por qué"
-
-> *"El código explica QUÉ. Los ADRs explican POR QUÉ."*
-
-- **`adr-ingestor.cjs`** → parsea ADRs (Architecture Decision Records) en formato MADR. Frontmatter → edges tipados sin LLM.
-- **`knowledge-ingestor.cjs`** → ingesta gotchas, convenciones y runbooks con frontmatter validado.
-
-### Fase 3 — Autonomía: cierre del loop al ~95%
-
-- **`spec-manager.cjs`** → specs estilo Kiro (AWS) con wave execution. Wave 1 = tareas sin dependencias, Wave 2 = dependen de Wave 1, etc.
-- **`impact-analyzer.cjs`** → análisis de impacto pre-cambio: AST + causal + knowledge → severidad ALTO/MEDIO/BAJO antes de tocar algo.
-
-### Fase 4 — Expansión
-
-- **Multi-lenguaje** → mismo pipeline para JS/TS, Python, Go, Rust, Java, Kotlin, C++, PHP, Ruby, Swift, C#, Scala.
-- **Modo colaborativo** → libSQL/Turso Sync: varios devs comparten la misma memoria del agente.
+> **Source:** Codebase-Memory (arXiv 2603.27277, 2026) — 83% output quality with 10× fewer tokens using a graph-backed approach vs blind codebase exploration.
 
 ---
 
-## Instalación
+## The Five Phases
+
+### Phase 0 — Harness: deterministic enforcement
+
+The piece missing from every other agent framework.
+
+Without gates, an agent can declare TDD complete without running a single test. With the harness, that is **impossible at the code level** — not at the prompt level.
+
+```
+Cursor Rules:   "Prefer running tests before delivering"
+                → the agent follows this when it feels like it
+
+Agentic KDD:    if (tests_passing === false) return STOP("deterministic gate")
+                → the code rejects progress without proof of compliance
+```
+
+- **`harness.cjs`** — PRE/EXEC/POST gates for all 8 pipeline steps. No step advances without the gate verifying output.
+- **`tdd-gate.cjs`** — mechanical self-healing loop in Node.js: detects test command, runs tests, parses output (Jest / Vitest / Mocha / pytest), retries up to 3×. The agent cannot lie about tests passing.
+- **`harness-rules.md`** — strong imperative rules re-injected per step. Not suggestions — constraints the gate verifies.
+
+### Phase 1 — Discernment: seeing the full codebase
+
+Before planning any change, the agent has a complete structural map of the project.
+
+- **`ast-indexer.cjs`** — AST graph (12 languages), regex fallback. Extracts functions, classes, imports, call graph → SQLite with PageRank scoring.
+- **`causal-edges.cjs`** — bi-temporal causal memory. Edges are never deleted — they're invalidated, preserving the full history.
+
+### Phase 2 — Knowledge Base: understanding *why*
+
+> *"Code explains WHAT was built. ADRs explain WHY."*
+
+- **`adr-ingestor.cjs`** — parses Architecture Decision Records in MADR format. Frontmatter → typed graph edges. No LLM required.
+- **`knowledge-ingestor.cjs`** — ingests gotchas, conventions, and runbooks. A linter enforces structure before ingestion.
+
+### Phase 3 — Autonomy: closing the loop at ~95%
+
+- **`spec-manager.cjs`** — Kiro-style specs with wave execution. Wave 1 = tasks with no dependencies. Wave N = tasks that depend on Wave N-1.
+- **`impact-analyzer.cjs`** — pre-change impact: AST + causal memory + knowledge base → CRITICAL / MEDIUM / LOW severity before touching anything.
+
+### Phase 4 — Expansion
+
+- **Multi-language** — same pipeline for JS/TS, Python, Go, Rust, Java, Kotlin, C++, PHP, Ruby, Swift, C#, Scala.
+- **Collaborative mode** — libSQL / Turso Sync. Multiple developers share one agent memory.
+
+---
+
+## Installation
 
 ```bash
-# Instalar la CLI globalmente
 npm install -g agentic-kdd
-
-# Ir al proyecto
-cd mi-proyecto
-
-# Instalar Agentic KDD en el proyecto
+cd my-project
 akdd init
 ```
 
-`akdd init` detecta el stack, descarga los archivos del repo, instala dependencias, configura el MCP server en Cursor automáticamente, y te da un solo comando para terminar la configuración desde el IDE.
+`akdd init` detects your stack, downloads the latest files from GitHub, installs dependencies, auto-configures the MCP server, and gives you one command to finish setup from the IDE.
 
-### Requisitos
+```bash
+# Open in Cursor or Claude Code, then:
+aa: configure
+```
 
-- Node.js 18+
-- Cursor, Claude Code, o cualquier cliente MCP
-- SQLite: `better-sqlite3` (se instala automáticamente) o Node.js 22+
+After `aa: configure` the system maps your full codebase once. Then:
+
+```bash
+aa: [your task]
+```
 
 ---
 
-## Comandos CLI — referencia completa
+## CLI Reference
 
-### Setup y diagnóstico
+### Setup & diagnostics
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd init` | Instalar Agentic KDD en el proyecto actual |
-| `akdd update` | Actualizar agentes + módulos sin tocar la memoria |
-| `akdd health` | Diagnóstico completo: qué está configurado, qué falta |
-| `akdd health --fix` | Auto-arreglar problemas detectados |
-| `akdd mcp` | Configurar MCP server en Cursor/Claude Code automáticamente |
-| `akdd mcp status` | Ver estado de la configuración MCP |
-| `akdd mcp --global` | Configurar MCP globalmente para todos los proyectos |
+| `akdd init` | Deploy Agentic KDD in the current project |
+| `akdd update` | Update agents + modules (memory untouched) |
+| `akdd health` | Full diagnostic: what's configured, what's missing |
+| `akdd health --fix` | Auto-fix detected issues |
+| `akdd mcp` | Auto-configure MCP in Cursor / Claude Code |
+| `akdd mcp status` | Check MCP configuration status |
+| `akdd mcp --global` | Configure MCP globally for all projects |
 
-### Memoria y conocimiento
+### Memory
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd sync` | Sincronizar archivos markdown → grafo SQLite |
-| `akdd graph` | Sync + mostrar stats del grafo |
-| `akdd stats` | Stats del grafo y reglas ALTA |
-| `akdd coala` | Stats completo de las 4 capas CoALA |
-| `akdd buscar "query"` | Búsqueda híbrida en toda la memoria |
-| `akdd impacto "Módulo"` | Impacto semántico de una entidad |
-| `akdd decay` | Aplicar decay temporal a patrones inactivos |
-| `akdd audit` | Auditoría de memoria: stale, contradicciones, propuestas |
-| `akdd forget <id>` | Olvidar una entrada de memoria con razón documentada |
+| `akdd sync` | Sync markdown → SQLite graph |
+| `akdd coala` | Stats across all 4 CoALA memory layers |
+| `akdd buscar "query"` | Hybrid search across all memory |
+| `akdd decay` | Apply temporal decay to inactive patterns |
+| `akdd audit` | Memory audit: stale entries, contradictions, proposals |
+| `akdd forget <id>` | Invalidate a memory entry with documented reason |
 
-### AST e impacto
+### AST & impact
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd ast` | Indexar proyecto en el grafo AST |
-| `akdd ast stats` | Stats del índice AST |
-| `akdd ast symbols <archivo>` | Símbolos extraídos de un archivo |
-| `akdd ast-impact <archivo>` | Análisis completo de impacto (AST + causal + knowledge) |
-| `akdd why <entidad>` | Explicar por qué existe algo (cadena causal completa) |
+| `akdd ast` | Index project into the AST graph |
+| `akdd ast stats` | AST index stats |
+| `akdd ast-impact <file>` | Full impact analysis (AST + causal + knowledge) |
+| `akdd why <entity>` | Why does this exist? (full causal chain) |
 
-### Specs y autonomía
+### Specs & autonomy
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd spec list` | Listar todos los specs del proyecto |
-| `akdd spec <módulo>` | Estado del spec + próxima wave |
-| `akdd spec create <módulo>` | Crear spec de feature |
-| `akdd spec create <módulo> --bugfix` | Crear spec de bugfix |
+| `akdd spec list` | List all module specs |
+| `akdd spec <module>` | Spec status + next execution wave |
+| `akdd spec create <module>` | Create a feature spec |
+| `akdd spec create <module> --bugfix` | Create a bugfix spec |
 
 ### Knowledge base
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd adr` | Ingestar ADRs desde `docs/adr/` |
-| `akdd knowledge` | Ingestar gotchas y convenciones |
+| `akdd adr` | Ingest ADRs from `docs/adr/` |
+| `akdd knowledge` | Ingest gotchas and conventions |
 
-### Métricas y observabilidad
+### Metrics & observability
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd metrics` | KPIs del proyecto: éxito, retrabajo, autonomy score, tokens |
-| `akdd metrics trend` | Tendencia de los últimos 10 ciclos |
-| `akdd trail` | Últimos decision trails (qué cambió y por qué) |
-| `akdd trail <ciclo_id>` | Trail completo de un ciclo específico |
-| `akdd trail why <entidad>` | Por qué existe este archivo/módulo |
+| `akdd metrics` | KPIs: success rate, rework, autonomy score, token savings |
+| `akdd metrics trend` | Trend across the last 10 cycles |
+| `akdd trail` | Recent decision trails (what changed and why) |
+| `akdd trail <cycle_id>` | Full trail of a specific cycle |
+| `akdd trail why <entity>` | Why does this file or module exist? |
 
-### Inteligencia v2.2
+### Intelligence
 
-| Comando | Descripción |
+| Command | Description |
 |---------|-------------|
-| `akdd git-context` | Análisis del diff de Git + risk assessment |
-| `akdd predict` | Patrones de riesgo predictivos desde memoria episódica |
-| `akdd embed-status` | Estado de embeddings locales (all-MiniLM-L6-v2) |
-| `akdd embed-install` | Instalar embeddings locales (~23MB, 100% offline) |
-| `akdd jina-install` | Instalar jina-v2-code embeddings (~500MB, optimizado para código) |
-| `akdd ci-install` | Instalar workflow de GitHub Actions para CI/CD automático |
-| `akdd ci-status` | Ver últimos reportes de CI/CD |
-| `akdd dashboard` | Abrir dashboard visual en el navegador |
+| `akdd git-context` | Git diff analysis + risk assessment |
+| `akdd predict` | Predictive risk patterns from episodic memory |
+| `akdd embed-install` | Install local embeddings (~23MB, 100% offline) |
+| `akdd ci-install` | Install GitHub Actions CI/CD memory workflow |
+| `akdd dashboard` | Open interactive visual dashboard in browser |
 
 ---
 
-## MCP Server — 23 tools nativas
+## MCP Server — 23 native tools
 
-Agentic KDD incluye un MCP server completo. Cursor y Claude Code lo descubren automáticamente después de `akdd init`. Las tools están disponibles directamente en el chat del IDE, sin bash commands intermedios.
-
-### Configuración manual (si akdd init no la hizo automáticamente)
+After `akdd init`, Cursor and Claude Code discover the MCP server automatically. Every tool is available directly in the IDE chat.
 
 ```json
-// .cursor/mcp.json
+// .cursor/mcp.json — written automatically by akdd init
 {
   "mcpServers": {
     "agentic-kdd": {
@@ -286,239 +334,98 @@ Agentic KDD incluye un MCP server completo. Cursor y Claude Code lo descubren au
 }
 ```
 
-```bash
-# Claude Code
-claude mcp add agentic-kdd -- node .agentic/grafo/mcp-server.cjs
-
-# O con el paquete npm
-npx agentic-kdd-mcp
-```
-
-### Tools disponibles
-
-| Tool MCP | Categoría | Descripción |
-|----------|-----------|-------------|
-| `grafo_buscar` | Memoria | Búsqueda híbrida en 4 capas CoALA |
-| `registrar_episodio` | Memoria | Registrar episodio crudo en memoria episódica |
-| `grafo_sync` | Memoria | Sincronizar markdown → SQLite |
-| `grafo_impacto` | Memoria | Impacto semántico de una entidad |
-| `registrar_entidad` | Memoria | Registrar entidad en grafo semántico |
-| `grafo_coala` | Memoria | Stats completo de las 4 capas |
-| `grafo_predecir` | Memoria | Estimación de riesgo pre-tarea |
-| `verdad_vigente` | Memoria | Solo reglas vigentes HOY (excluye histórico/obsoleto) |
-| `ast_impact` | AST | Impacto completo (AST + causal + knowledge) |
-| `ast_index` | AST | Indexar proyecto en grafo AST |
-| `ast_symbols` | AST | Símbolos de un archivo específico |
-| `impact_precheck` | AST | Pre-check de impacto para un módulo |
-| `impact_diff` | AST | Impacto combinado de varios archivos |
-| `spec_waves` | Specs | Waves de ejecución del spec de un módulo |
-| `spec_status` | Specs | Estado del spec (% completado, próxima wave) |
-| `spec_create` | Specs | Crear spec nuevo (feature/bugfix) |
-| `knowledge_query` | Knowledge | Consultar ADRs y gotchas de un módulo |
-| `adr_ingest` | Knowledge | Ingestar ADRs en knowledge base |
-| `causal_add` | Causal | Registrar edge causal |
-| `causal_query` | Causal | Consultar historial causal |
-| `decision_trail` | Observabilidad | Trail completo de un ciclo |
-| `decision_why` | Observabilidad | Por qué existe algo (cadena causal) |
-| `recent_ciclos` | Observabilidad | Últimos N ciclos |
-| `metrics_summary` | Observabilidad | KPIs operacionales del proyecto |
-| `health_check` | Diagnóstico | Diagnóstico completo del sistema |
-| `memory_audit` | Diagnóstico | Auditoría de memoria (stale, contradicciones) |
-| `memory_forget` | Diagnóstico | Olvidar entrada con razón documentada |
+| Tool | Category |
+|------|----------|
+| `grafo_buscar` · `verdad_vigente` · `grafo_predecir` | Memory |
+| `ast_impact` · `ast_index` · `ast_symbols` · `impact_precheck` · `impact_diff` | AST |
+| `spec_waves` · `spec_status` · `spec_create` | Specs |
+| `knowledge_query` · `adr_ingest` | Knowledge |
+| `causal_add` · `causal_query` | Causal memory |
+| `decision_trail` · `decision_why` · `recent_ciclos` · `metrics_summary` | Observability |
+| `health_check` · `memory_audit` · `memory_forget` | Diagnostics |
 
 ---
 
-## Los 9 agentes especializados
-
-| Agente | Rol |
-|--------|-----|
-| `00-setup` | Configuración inicial — mapea el proyecto una sola vez |
-| `01-orquestador` | Director del pipeline `aa:` — dirige el flujo completo |
-| `02-analista` | Convierte la instrucción en plan técnico — lee memoria + AST + ADRs |
-| `03-front` | Implementa frontend (React, Vue, HTML/CSS, mobile) |
-| `04-back` | Implementa backend (APIs, lógica, DB, servicios) |
-| `05-qa` | Verifica criterios de aceptación + suite completa |
-| `06-tdd` | TDD + self-healing mecánico via `tdd-gate.cjs` |
-| `07-memoria` | Sincroniza las 4 capas, registra edges causales, actualiza specs |
-| `08-aprende` | Consolida episodios → patrones reutilizables |
-| `09-sprint` | Protocolo de sprints — múltiples tareas sin intervención |
-
-### Agentes pro (especializados)
-
-| Agente | Rol |
-|--------|-----|
-| `ag-review` | Code review automático contra memoria KDD — se ejecuta sin pedirlo |
-| `ag-refactor` | Refactors seguros con análisis de impacto previo |
-| `ag-doc` | Documentación técnica desde código y memoria del proyecto |
-| `ag-test` | Suites de tests basadas en errores históricos del proyecto |
-
----
-
-## ¿Qué lo diferencia?
+## How it compares
 
 | | Agentic KDD v3 | Cursor Rules | GitHub Copilot | LangGraph | CrewAI |
 |---|:---:|:---:|:---:|:---:|:---:|
-| Memoria persistente entre sesiones | ✅ SQLite | ❌ | ❌ | ⚠️ parcial | ❌ |
-| Gates deterministas (harness) | ✅ | ❌ | ❌ | ⚠️ manual | ❌ |
-| Grafo AST del codebase | ✅ | ❌ | ⚠️ limitado | ❌ | ❌ |
-| Knowledge base (ADRs/gotchas) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Self-healing mecánico en código | ✅ | ❌ | ❌ | ⚠️ config | ❌ |
-| Edges causales bi-temporales | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Pipeline de 8 pasos autónomo | ✅ | ❌ | ❌ | ✅ | ✅ |
-| Funciona 100% offline | ✅ | ✅ | ❌ | ⚠️ | ❌ |
-| Vive dentro del proyecto (no SaaS) | ✅ | ✅ | ❌ | ❌ | ❌ |
-| MCP server nativo (23 tools) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Observabilidad de decisiones | ✅ | ❌ | ❌ | ⚠️ | ❌ |
-| Multi-lenguaje (12 lenguajes) | ✅ | ✅ | ✅ | ✅ | ✅ |
-
-### La ventaja real
-
-Cursor Rules son pistas que el modelo puede ignorar. Agentic KDD tiene **gates en código** que verifican el output antes de avanzar. La diferencia:
-
-```
-Cursor Rules:   "Prefiere ejecutar tests antes de entregar"
-                → el agente lo sigue cuando quiere
-
-Agentic KDD:    if (tests_passing === false) return STOP("Gate determinista")
-                → el código rechaza el avance sin prueba de cumplimiento
-```
+| Persistent memory between sessions | ✅ | ❌ | ❌ | ⚠️ | ❌ |
+| Deterministic enforcement gates | ✅ | ❌ | ❌ | ⚠️ | ❌ |
+| Full codebase AST graph | ✅ | ❌ | ⚠️ | ❌ | ❌ |
+| Knowledge base (ADRs / gotchas) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Mechanical self-healing in code | ✅ | ❌ | ❌ | ⚠️ | ❌ |
+| Autonomous 8-step pipeline | ✅ | ❌ | ❌ | ✅ | ✅ |
+| 100% offline | ✅ | ✅ | ❌ | ⚠️ | ❌ |
+| Lives inside the project (no SaaS) | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Native MCP server (23 tools) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Collaborative shared memory | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
-## Flujo de conocimiento
+## Switching IDEs
 
-```
-Ciclo aa: [tarea]
-   │
-   ├─ ANTES   → Analista consulta grafo + AST + ADRs + gotchas + spec
-   │              "¿Qué sé? ¿Qué restricciones aplican? ¿Qué puede fallar?"
-   │
-   ├─ DURANTE → Harness verifica cada paso en código
-   │              "¿El agente probó lo que dice que hizo?"
-   │
-   └─ DESPUÉS → Memoria registra episodio + edges causales + spec actualizado
-                  "¿Qué aprendimos? ¿Qué causó qué? ¿Qué restricción nueva aplica?"
-
-Próximo ciclo: el sistema sabe más que en el ciclo anterior.
-```
-
----
-
-## Dashboard visual
-
-```bash
-akdd dashboard
-```
-
-Abre un dashboard interactivo en el navegador con:
-
-- **Knowledge Graph** — grafo D3.js de toda la memoria del proyecto (drag & drop, pin nodos, slider de repulsión, spread automático)
-- **Project Docs** — documentación del proyecto generada desde el código
-- **Nodes** — browser de patrones, errores y decisiones con búsqueda
-- **Stats** — métricas de ciclos, autonomy score, calidad de memoria
-
----
-
-## Estructura del proyecto después de `akdd init`
-
-```
-tu-proyecto/
-├── .agentic/
-│   ├── agentes/          → 9 agentes + 4 pro (archivos .md)
-│   │   ├── 01-orquestador.md
-│   │   ├── 02-analista.md
-│   │   └── ... (9 agentes)
-│   ├── grafo/            → 19 módulos Node.js
-│   │   ├── grafo.cjs         — motor principal de memoria
-│   │   ├── harness.cjs       — enforcement de pipeline
-│   │   ├── tdd-gate.cjs      — self-healing mecánico
-│   │   ├── ast-indexer.cjs   — grafo AST
-│   │   ├── causal-edges.cjs  — memoria causal
-│   │   ├── adr-ingestor.cjs  — knowledge base
-│   │   ├── spec-manager.cjs  — wave execution
-│   │   ├── impact-analyzer.cjs — pre-change analysis
-│   │   ├── decision-trail.cjs  — observabilidad
-│   │   ├── metrics.cjs         — KPIs
-│   │   ├── memory-audit.cjs    — auditoría
-│   │   ├── health-check.cjs    — diagnóstico
-│   │   ├── mcp-server.cjs      — 23 MCP tools
-│   │   └── ...
-│   ├── memoria/          → patrones, errores, decisiones (.md)
-│   ├── specs/            → specs de módulos con wave execution
-│   ├── conocimiento/     → ADRs, gotchas, convenciones
-│   ├── config.md         → stack, módulos, reglas del proyecto
-│   └── memoria.db        → SQLite con toda la memoria
-├── .cursor/
-│   └── mcp.json          → configurado automáticamente por akdd init
-├── .audit/               → 7 agentes de QA especializados
-├── dashboard.cjs         → dashboard visual interactivo
-├── CLAUDE.md             → activa aa: / ag: / audit:
-└── .cursorrules          → reglas para Cursor
-```
-
----
-
-## Quickstart en 3 pasos
-
-```bash
-# 1. Instalar CLI
-npm install -g agentic-kdd
-
-# 2. Instalar en tu proyecto
-cd mi-proyecto
-akdd init
-
-# 3. Abrir en Cursor o Claude Code y configurar
-aa: configurar
-```
-
-Después de `aa: configurar` el sistema mapea tu codebase completo, detecta el stack, y está listo para trabajar. A partir de ahí, solo:
-
-```
-aa: [descripción de la tarea]
-```
-
----
-
-## Actualizar un proyecto existente
-
-```bash
-# Solo esto — la memoria queda intacta
-akdd update
-```
-
-`akdd update` descarga los nuevos módulos de GitHub y los instala en `.agentic/`. Las migraciones del schema SQLite corren automáticamente en el siguiente ciclo.
-
----
-
-## Cambiar de IDE (Cursor → Claude Code o viceversa)
-
-No necesitas reconfigurar nada. La memoria vive en el proyecto, no en el IDE. El único paso al cambiar de IDE:
+Memory lives in the project, not the IDE. When switching from Cursor to Claude Code (or back):
 
 ```bash
 akdd mcp
 ```
 
----
-
-## Paquetes npm
-
-| Paquete | Descripción | Versión |
-|---------|-------------|---------|
-| [`agentic-kdd`](https://www.npmjs.com/package/agentic-kdd) | CLI: init, update, health, ast, metrics, trail y más | ![npm](https://img.shields.io/npm/v/agentic-kdd?style=flat-square) |
-| [`agentic-kdd-mcp`](https://www.npmjs.com/package/agentic-kdd-mcp) | MCP server standalone: 23 tools para Cursor/Claude Code | ![npm](https://img.shields.io/npm/v/agentic-kdd-mcp?style=flat-square) |
+That's the only step.
 
 ---
 
-## Compatibilidad
+## Updating an existing project
 
-| IDE / Cliente | Soporte | Notas |
-|---------------|---------|-------|
-| **Cursor** | ✅ Completo | MCP auto-configurado en `akdd init` |
-| **Claude Code** | ✅ Completo | `claude mcp add` automático |
-| **VS Code** | ✅ Via extensión | Ver `vscode-extension/` |
-| **Windsurf** | ✅ Via MCP | Configuración manual de `.cursor/mcp.json` |
-| **JetBrains** | ⚠️ Parcial | MCP en beta en JetBrains AI |
+```bash
+akdd update
+```
+
+Downloads the latest modules from GitHub. Schema migrations run automatically on the next cycle. **Memory stays intact.**
+
+---
+
+## Project structure after `akdd init`
+
+```
+your-project/
+├── .agentic/
+│   ├── agentes/              9 agents + 4 pro (markdown)
+│   ├── grafo/                19 Node.js modules
+│   │   ├── grafo.cjs         memory engine (CoALA v3)
+│   │   ├── harness.cjs       pipeline enforcement
+│   │   ├── tdd-gate.cjs      mechanical self-healing
+│   │   ├── ast-indexer.cjs   AST graph (12 languages)
+│   │   ├── causal-edges.cjs  bi-temporal causal memory
+│   │   ├── adr-ingestor.cjs  knowledge base
+│   │   ├── spec-manager.cjs  Kiro-style wave execution
+│   │   ├── impact-analyzer.cjs  pre-change impact
+│   │   ├── decision-trail.cjs   decision observability
+│   │   ├── metrics.cjs          project KPIs
+│   │   ├── memory-audit.cjs     memory governance
+│   │   ├── health-check.cjs     system diagnostics
+│   │   ├── mcp-server.cjs       23 MCP tools
+│   │   └── collab-manager.cjs   collaborative sync
+│   ├── memoria/              patterns · errors · decisions
+│   ├── specs/                module specs with wave execution
+│   ├── conocimiento/         ADRs · gotchas · conventions
+│   ├── config.md             project stack and rules
+│   └── memoria.db            SQLite — all memory lives here
+├── .cursor/mcp.json          auto-configured by akdd init
+├── .audit/                   7 specialized QA agents
+├── dashboard.cjs             interactive visual dashboard
+├── CLAUDE.md                 activates aa: / ag: / audit:
+└── .cursorrules              Cursor rules
+```
+
+---
+
+## Packages
+
+| Package | |
+|---------|---|
+| [`agentic-kdd`](https://www.npmjs.com/package/agentic-kdd) | CLI: init, update, health, ast, metrics, trail, mcp and more |
+| [`agentic-kdd-mcp`](https://www.npmjs.com/package/agentic-kdd-mcp) | Standalone MCP server: 23 tools for Cursor and Claude Code |
 
 ---
 
@@ -530,8 +437,13 @@ MIT © [Adrianlpz211](https://github.com/Adrianlpz211)
 
 <div align="center">
 
-**[npm agentic-kdd](https://www.npmjs.com/package/agentic-kdd)** · **[npm agentic-kdd-mcp](https://www.npmjs.com/package/agentic-kdd-mcp)** · **[GitHub](https://github.com/Adrianlpz211/Agentic-KDD)**
+<br/>
 
-*Un desarrollador. La capacidad de un departamento.*
+**[npm](https://www.npmjs.com/package/agentic-kdd)** · **[mcp](https://www.npmjs.com/package/agentic-kdd-mcp)** · **[github](https://github.com/Adrianlpz211/Agentic-KDD)**
+
+<br/>
+
+*An army of one.*  
+*When you're ready to call for backup — a legion.*
 
 </div>
