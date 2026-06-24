@@ -153,13 +153,43 @@ async function collabInit(projectRoot) {
 
 // ─── JOIN — PARA EL DEV QUE SE UNE AL EQUIPO ─────────────────────────────────
 
-async function collabJoin(projectRoot, url, token) {
+async function collabJoin(projectRoot, urlOrCode, token) {
   console.log('\n[COLLAB] Uniéndose al equipo...\n');
+
+  let finalUrl = urlOrCode;
+  let finalToken = token;
+
+  // Detectar si es un código de invitación (formato: PREFIX-XXXXXX)
+  const isInviteCode = !urlOrCode?.startsWith('libsql://') && !urlOrCode?.startsWith('http');
+
+  if (isInviteCode) {
+    console.log(`[COLLAB] Resolviendo código: ${urlOrCode}`);
+    try {
+      const response = await fetch(`${PROVISIONER_URL}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: urlOrCode }),
+      });
+      const result = await response.json();
+
+      if (!result.ok) {
+        console.error(`[COLLAB] ❌ ${result.error}`);
+        process.exit(1);
+      }
+
+      finalUrl   = result.url;
+      finalToken = result.token;
+      console.log(`[COLLAB] ✅ Código válido. Conectando a: ${result.db}`);
+    } catch (e) {
+      console.error('[COLLAB] Error resolviendo código:', e.message);
+      process.exit(1);
+    }
+  }
 
   const config = {
     enabled: true,
-    url,
-    token,
+    url: finalUrl,
+    token: finalToken,
     member_id: os.userInfo().username,
     sync_on_cycle_end: true,
     last_sync: null,
@@ -174,6 +204,48 @@ async function collabJoin(projectRoot, url, token) {
   await syncDown(projectRoot);
 
   console.log('[COLLAB] ✅ Listo. Ya tienes toda la memoria del equipo.\n');
+}
+
+// ─── INVITE ───────────────────────────────────────────────────────────────────
+
+async function collabInvite(projectRoot) {
+  const config = loadConfig(projectRoot);
+  if (!config?.enabled) {
+    console.log('\n[COLLAB] Modo colaborativo no activado. Correr: akdd collab init\n');
+    return;
+  }
+
+  const projectId = config.project_id || getProjectId(projectRoot);
+  console.log('\n[COLLAB] Generando código de invitación...');
+
+  let result;
+  try {
+    const response = await fetch(`${PROVISIONER_URL}/invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId }),
+    });
+    result = await response.json();
+  } catch (e) {
+    console.error('[COLLAB] Error:', e.message);
+    return;
+  }
+
+  if (!result.ok) {
+    console.error('[COLLAB] Error generando código:', result.error);
+    return;
+  }
+
+  console.log('\n' + '═'.repeat(50));
+  console.log('  🔑 Código de invitación Agentic KDD');
+  console.log('═'.repeat(50));
+  console.log(`\n  Código:   ${result.code}`);
+  console.log(`  Expira:   ${result.expires_in}`);
+  console.log(`  Un solo uso — expira al usarse o en 24h`);
+  console.log('\n  Comparte este código por Slack/WhatsApp.');
+  console.log('  El miembro del equipo corre:');
+  console.log(`\n  akdd collab join ${result.code}\n`);
+  console.log('═'.repeat(50) + '\n');
 }
 
 // ─── SYNC UP (local → Turso) ──────────────────────────────────────────────────
@@ -368,9 +440,13 @@ if (require.main === module) {
     case 'init':
       collabInit(projectRoot).catch(console.error);
       break;
+    case 'invite':
+      collabInvite(projectRoot).catch(console.error);
+      break;
     case 'join':
-      if (!arg1 || !arg2) {
-        console.error('Uso: collab-manager.cjs join <url> <token>');
+      if (!arg1) {
+        console.error('Uso: collab-manager.cjs join <código>');
+        console.error('  o: collab-manager.cjs join <url> <token>');
         process.exit(1);
       }
       collabJoin(projectRoot, arg1, arg2).catch(console.error);
@@ -396,6 +472,7 @@ if (require.main === module) {
 module.exports = {
   collabInit,
   collabJoin,
+  collabInvite,
   syncUp,
   syncDown,
   status,
