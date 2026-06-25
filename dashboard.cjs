@@ -49,10 +49,67 @@ function readConfig() {
       return result.join('\n').trim();
     };
 
-    // Leer yaml block para stack
+    // Leer stack — soporta múltiples formatos de config.md
     const getYaml = (key) => {
-      const m = c.match(new RegExp('  ' + key + ': (.+)'));
-      return m ? m[1].trim() : '—';
+      // Formato 1: yaml "  key: value"
+      let m = c.match(new RegExp('  ' + key + ': (.+)'));
+      if (m) return m[1].trim();
+      // Formato 2: markdown bold "**KEY:** value" (case insensitive)
+      m = c.match(new RegExp('\\*\\*' + key + '\\*\\*:?\\s*(.+)', 'i'));
+      if (m) return m[1].replace(/\*\*/g,'').trim();
+      // Formato 3: uppercase "KEY: value"
+      m = c.match(new RegExp('(?:^|\n)' + key.toUpperCase() + ': (.+)'));
+      if (m) return m[1].trim();
+      return '—';
+    };
+
+    // Extraer stack completo si existe como campo STACK
+    const getStack = () => {
+      const m = c.match(/(?:STACK|stack|Stack):?\s*(.+)/);
+      return m ? m[1].replace(/\*\*/g,'').trim() : null;
+    };
+    const stackFull = getStack();
+
+    // Para framework: intentar detectar de package.json si config.md no lo tiene
+    const getPkgJson = (field) => {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
+        const deps = {...(pkg.dependencies||{}), ...(pkg.devDependencies||{})};
+        if (field === 'framework') {
+          if (deps['next']) return 'Next.js ' + (deps['next']||'');
+          if (deps['express']) return 'Express';
+          if (deps['fastify']) return 'Fastify';
+          if (deps['@nestjs/core']) return 'NestJS';
+          if (deps['hono']) return 'Hono';
+        }
+        if (field === 'language') {
+          if (deps['typescript'] || deps['ts-node']) return 'TypeScript';
+          return 'JavaScript';
+        }
+        if (field === 'runtime') {
+          return 'Node.js ' + (pkg.engines?.node || '18+');
+        }
+        if (field === 'base_datos') {
+          if (deps['@prisma/client']) return 'Prisma';
+          if (deps['pg'] || deps['postgres']) return 'PostgreSQL';
+          if (deps['mysql2']) return 'MySQL';
+          if (deps['better-sqlite3']) return 'SQLite';
+        }
+        if (field === 'package_manager') {
+          if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) return 'yarn';
+          if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
+          return 'npm';
+        }
+      } catch {}
+      return null;
+    };
+
+    const smartGet = (key) => {
+      const fromYaml = getYaml(key);
+      if (fromYaml && fromYaml !== '—') return fromYaml;
+      const fromPkg = getPkgJson(key);
+      if (fromPkg) return fromPkg;
+      return stackFull || '—';
     };
 
     return {
@@ -64,11 +121,12 @@ function readConfig() {
         return get('Descripción');
       })(),
       tipo: get('Tipo'),
-      framework: getYaml('framework'),
-      language: getYaml('language'),
-      runtime: getYaml('runtime'),
-      base_datos: getYaml('base_datos'),
-      package_manager: getYaml('package_manager'),
+      framework: smartGet('framework'),
+      language: smartGet('language'),
+      runtime: smartGet('runtime'),
+      base_datos: smartGet('base_datos'),
+      package_manager: smartGet('package_manager'),
+      stack: stackFull,
       cmd_dev: getYaml('dev'),
       cmd_test: getYaml('test'),
       cmd_build: getYaml('build'),
@@ -423,7 +481,7 @@ function buildModuleGraph() {
   // Crear nodos de módulos implementados
   modulosImpl.forEach((m, i) => {
     const area = m.toLowerCase().replace(/\s+/g, '-').split(/[\s\/\-]/)[0];
-    const stats = areaCount[area] || areaCount['global'] || { errors: 0, patterns: 0, decisions: 0, high: 0 };
+    const stats = areaCount[area] || { errors: 0, patterns: 0, decisions: 0, high: 0 };
     mNodes.push({ id: 'impl-' + i, label: m, tipo: 'impl', area, errors: stats.errors, patterns: stats.patterns, high: stats.high, degree: stats.errors + stats.patterns + stats.decisions });
   });
 
@@ -927,11 +985,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="docs-h1" data-i="h_stack">Tech Stack</div>
         <div class="docs-sub" data-i="sub_stack">Technologies and frameworks used in this project.</div>
         <div class="stack-grid">
-          <div class="stack-item"><div class="si-label">Framework</div><div class="si-val">${config.framework || '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Language</div><div class="si-val">${config.language || '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Runtime</div><div class="si-val">${config.runtime || '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Database</div><div class="si-val">${config.base_datos || '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Package Manager</div><div class="si-val">${config.package_manager || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Framework</div><div class="si-val">${config.framework && config.framework !== '—' ? config.framework : (config.stack || '—')}</div></div>
+          <div class="stack-item"><div class="si-label">Language</div><div class="si-val">${config.language && config.language !== '—' ? config.language : '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Runtime</div><div class="si-val">${config.runtime && config.runtime !== '—' ? config.runtime : '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Database</div><div class="si-val">${config.base_datos && config.base_datos !== '—' ? config.base_datos : '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Package Manager</div><div class="si-val">${config.package_manager && config.package_manager !== '—' ? config.package_manager : '—'}</div></div>
+          ${config.stack ? '<div class="stack-item" style="grid-column:1/-1"><div class="si-label">Full Stack</div><div class="si-val">' + escHtml(config.stack) + '</div></div>' : ''}
         </div>
         <div class="docs-h2">Commands</div>
         <div class="cmd-row"><div class="cmd-label">dev</div><div class="cmd-val">${config.cmd_dev || '—'}</div></div>
@@ -1258,9 +1317,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </div>
 
 <!-- ════════ PRESERVATION INTEL ════════ -->
-<div id="mode-intel" style="display:none;flex:1;overflow-y:auto;padding:24px;flex-direction:column;gap:20px">
-
-  <style>
+<style>
   #mode-intel { background: var(--bg); }
   .il-title { font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin:0 0 12px }
   .il-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:20px }
@@ -1302,7 +1359,12 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   .obs-badge { font-size:10px;padding:2px 7px;border-radius:9px;background:rgba(99,91,255,.15);color:#818cf8;font-weight:600 }
   .obs-txt   { font-size:13px;color:var(--text2);line-height:1.5 }
   .obs-cmd   { font-family:monospace;font-size:11px;background:rgba(255,255,255,.05);color:#a5b4fc;padding:6px 10px;border-radius:6px;margin-top:8px;display:block }
-  </style>
+  /* fix intel layout */
+  #mode-intel { display:none;flex:1;overflow-y:auto;padding:24px;flex-direction:column;gap:0;align-items:stretch;justify-content:flex-start;box-sizing:border-box; }
+</style>
+<div id="mode-intel" style="display:none;width:100%;height:100%;overflow-y:auto;background:var(--bg);flex-direction:column;align-items:stretch;justify-content:flex-start;padding:24px;box-sizing:border-box;gap:0">
+
+
 
   <p class="il-title">Contract Guard</p>
   <div class="il-grid">
@@ -1411,7 +1473,21 @@ function setMode(mode,el){
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('mode-graph').style.display=mode==='graph'?'flex':'none';
-  if(document.getElementById('mode-intel')) document.getElementById('mode-intel').style.display=mode==='intel'?'flex':'none';
+  const intelEl = document.getElementById('mode-intel');
+  const contentEl = document.querySelector('.content');
+  if(intelEl) {
+    if(mode === 'intel') {
+      if(contentEl) contentEl.style.display = 'none';
+      intelEl.style.display = 'flex';
+      intelEl.style.flex = '1';
+      intelEl.style.flexDirection = 'column';
+      intelEl.style.overflowY = 'auto';
+      intelEl.style.width = '100%';
+    } else {
+      if(contentEl) contentEl.style.display = 'flex';
+      intelEl.style.display = 'none';
+    }
+  }
   document.getElementById('mode-docs').style.display=mode==='docs'?'flex':'none';
   if(mode==='docs')setTimeout(renderModuleGraph,100);
 }
