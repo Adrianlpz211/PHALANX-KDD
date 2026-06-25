@@ -94,6 +94,32 @@ Si `.agentic/config.md` dice `CONFIGURADO: NO`:
 El Setup lee TODO el proyecto (código, docs, contexto existente)
 y se configura solo. Solo pregunta lo mínimo necesario.
 
+
+## REGLA 7 — DETECCIÓN AUTOMÁTICA DE TAREAS SIN aa:
+
+Red de seguridad para cuando el dev olvida escribir `aa:`.
+
+Si el mensaje NO tiene `aa:` pero cumple los criterios, trátalo como aa: y ejecuta el pipeline.
+
+### TRATAR COMO aa: si:
+- Empieza con verbo de acción técnica:
+  implement, create, fix, add, modify, refactor, connect, integrate, build,
+  develop, correct, update, generate, implementa, crea, arregla, agrega,
+  añade, modifica, conecta, construye, desarrolla, corrige, actualiza
+- Menciona un archivo específico o módulo del proyecto
+- Tiene prefijo técnico: fix: / feat: / build: / dev: / chore:
+- Frase de intención clara: "necesito que", "haz que", "quiero que"
+
+### NO ejecutar el pipeline si:
+- Termina en ? (es una pregunta)
+- Empieza con: explain, what, how, why, when, show me, explícame, qué es,
+  cómo funciona, muéstrame, dame, qué piensas
+- Es consulta de estado: akdd health, akdd metrics, akdd trail, akdd buscar
+
+### Al detectar tarea sin aa:, mostrar antes de ejecutar:
+🔄 Detected development task — running as aa:
+
+
 # ============================================================
 # REGLAS DEL PROYECTO — agregar las tuyas aquí abajo
 # ============================================================
