@@ -24,38 +24,26 @@
 ---
 
 
-## Benchmark results
 
-Early benchmark — 12 phases, reproducible by anyone.
+## Early benchmark
 
-**Product tested:** Task Management REST API (Node.js / TypeScript / Express / Prisma)  
-**Setup:** Two Cursor windows, same project, same prompts — one with Agentic KDD (`aa:` prefix), one without.
+> **Note:** These results come from a controlled internal test — not a peer-reviewed study. Treat them as directional, not definitive.
 
-```
-┌─────────────────────────────────┬──────────┬──────────┬──────────┐
-│ Metric                          │ Without  │  With    │  Change  │
-├─────────────────────────────────┼──────────┼──────────┼──────────┤
-│ Errors per phase                │     1.3  │     1.0  │  -23%    │
-│ Phases with repeated error      │       5  │       0  │ -100%    │
-│ Steps to complete per phase     │     2.0  │     1.7  │  -15%    │
-│ Tests passing first try (%)     │      94  │      79  │  -16pp   │
-└─────────────────────────────────┴──────────┴──────────┴──────────┘
-```
+Two Cursor windows, same project (Task Management REST API, Node.js/TypeScript), same 12 prompts — one with Agentic KDD active, one without.
 
-**The number that matters:** Agentic KDD eliminated 100% of repeated errors across 12 development phases. An agent without memory repeated known error patterns 5 times. With Agentic KDD: 0 repetitions.
+| Metric | Without Agentic | With Agentic |
+|--------|----------------|--------------|
+| Errors per phase | 1.3 | 1.0 |
+| Repeated errors across phases | 5 | 0 |
+| Steps to complete per phase | 2.0 | 1.7 |
+| Tests passing first try | 94% | 79% |
 
-**On the -16pp first-try rate:** Agentic KDD implemented more complete solutions — catching security issues, repairing accumulated bugs, detecting spec drift — which generated more tests and more edge cases. The agent without memory implemented the minimum asked and moved on. More tests failing is a sign of deeper analysis, not worse performance.
+The repeated errors metric is the most meaningful: an agent without memory repeated the same mistake 5 times across 12 phases. With Agentic KDD: 0 repetitions. The lower first-try rate reflects that Agentic implemented more complete solutions that surfaced more edge cases — not worse performance.
 
-**Notable findings by phase:**
-- Phase 5 (intentional auth bug): Agentic showed a "design consideration" warning *before* touching the critical file. The stateless agent implemented blindly.
-- Phase 7 (regression prevention): Preservation Gate protected a fix from being overwritten when the same file was touched again.
-- Phase 11 (pattern evolution): Agentic detected and queued 2 additional occurrences of the same bug pattern without being asked.
-- Phase 12 (spec drift): Agentic detected that `password: z.string().min(3)` contradicted the original spec (`min(8)`) and corrected it autonomously.
-
-Reproduce it: **[github.com/Adrianlpz211/Agentic-KDD-Benchmark](https://github.com/Adrianlpz211/Agentic-KDD-Benchmark)**  
-Full results with phase-by-phase breakdown: [`benchmark-results-12fases.md`](docs/benchmark-results-12fases.md)
+A reproducible benchmark with public methodology is in progress.
 
 ---
+
 
 ## The problem
 
