@@ -1,214 +1,301 @@
 /**
- * Agentic KDD — VS Code Extension v0.1.0
+ * Agentic KDD — VS Code Extension v0.2.0
+ * Works in VS Code with Copilot, Claude Code, and any MCP-compatible agent.
  *
- * Integra el framework Agentic KDD directamente en VS Code:
- *   - Dashboard sidebar (webview reutilizando dashboard.cjs)
- *   - Comandos de contexto (AST index, impact analysis, spec creation)
- *   - MCP server registration via registerMcpServerDefinitionProvider
- *   - File save hooks para indexación automática
- *
- * Referencia: cómo lo hace Cline/Roo Code (webview + MCP local)
+ * Features:
+ *   - Sidebar dashboard with live memory stats from SQLite
+ *   - MCP server auto-registration (Claude Code + Copilot)
+ *   - 12 commands via Ctrl+Shift+P
+ *   - Right-click context menu on files
+ *   - File save hook for AST auto-index
+ *   - Status bar indicator
  */
 
 'use strict';
 
-const vscode = require('vscode');
-const path   = require('path');
-const { execSync, spawn } = require('child_process');
+const vscode  = require('vscode');
+const path    = require('path');
+const fs      = require('fs');
+const { execSync } = require('child_process');
 
-// ─── ACTIVACIÓN ───────────────────────────────────────────────────────────────
+// ─── ACTIVATE ────────────────────────────────────────────────────────────────
 
 function activate(context) {
-  console.log('Agentic KDD extension activated');
-
   const projectRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!projectRoot) return;
 
-  // ── 1. Dashboard Sidebar ────────────────────────────────────────────────
-  const dashboardProvider = new AgenticDashboardProvider(context.extensionUri, projectRoot);
+  // 1. Sidebar
+  const provider = new AgenticSidebarProvider(context.extensionUri, projectRoot);
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('agentickdd.dashboard', dashboardProvider)
+    vscode.window.registerWebviewViewProvider('agentickdd.dashboard', provider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    })
   );
 
-  // ── 2. MCP Server Registration ─────────────────────────────────────────
-  // Registra el MCP server local para que Claude Code lo descubra automáticamente
-  if (vscode.lm?.registerMcpServerDefinitionProvider) {
+  // 2. MCP auto-registration
+  const mcpPath = path.join(projectRoot, '.agentic/grafo/mcp-server.cjs');
+  if (fs.existsSync(mcpPath) && vscode.lm && vscode.lm.registerMcpServerDefinitionProvider) {
     context.subscriptions.push(
       vscode.lm.registerMcpServerDefinitionProvider('agentic-kdd', {
-        provideMcpServerDefinition: () => ({
-          label: 'Agentic KDD',
-          command: 'node',
-          args: [path.join(projectRoot, '.agentic/grafo/mcp-server.cjs')],
-          type: 'stdio',
-          env: { PROJECT_ROOT: projectRoot },
-        })
+        provideMcpServerDefinition: function() {
+          return {
+            label:   'Agentic KDD',
+            command: 'node',
+            args:    [mcpPath],
+            type:    'stdio',
+            env:     { PROJECT_ROOT: projectRoot },
+          };
+        },
       })
     );
   }
 
-  // ── 3. Comandos ─────────────────────────────────────────────────────────
+  // 3. Status bar
+  const bar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  const installed = fs.existsSync(path.join(projectRoot, '.agentic/memoria.db'));
+  bar.text    = installed ? '$(circuit-board) Agentic KDD' : '$(circuit-board) Agentic (akdd init)';
+  bar.tooltip = 'Agentic KDD — click to open dashboard';
+  bar.command = 'agentickdd.showDashboard';
+  bar.show();
+  context.subscriptions.push(bar);
 
-  // Mostrar dashboard
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentickdd.showDashboard', () => {
-      dashboardProvider.show();
-    })
-  );
+  // 4. Commands
+  function runTerm(name, cmd) {
+    var t = vscode.window.createTerminal(name);
+    t.show();
+    t.sendText(cmd);
+  }
 
-  // Indexar AST
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentickdd.indexAST', async () => {
-      const terminal = vscode.window.createTerminal('Agentic KDD — AST Index');
-      terminal.show();
-      terminal.sendText(`cd "${projectRoot}" && node .agentic/grafo/ast-indexer.cjs index`);
-    })
-  );
+  function reg(id, fn) {
+    context.subscriptions.push(vscode.commands.registerCommand(id, fn));
+  }
 
-  // Query memoria
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentickdd.queryMemory', async () => {
-      const query = await vscode.window.showInputBox({ prompt: 'Buscar en memoria KDD...' });
-      if (!query) return;
-      const terminal = vscode.window.createTerminal('Agentic KDD — Memory Query');
-      terminal.show();
-      terminal.sendText(`cd "${projectRoot}" && node .agentic/grafo/grafo.cjs buscar "${query}"`);
-    })
-  );
+  reg('agentickdd.showDashboard', function() {
+    vscode.commands.executeCommand('agentickdd.dashboard.focus');
+  });
 
-  // Analizar impacto del archivo actual
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentickdd.analyzeImpact', async () => {
-      const activeFile = vscode.window.activeTextEditor?.document.uri.fsPath;
-      if (!activeFile) {
-        vscode.window.showWarningMessage('Abrir un archivo primero');
-        return;
-      }
-      const relPath = path.relative(projectRoot, activeFile);
-      const terminal = vscode.window.createTerminal('Agentic KDD — Impact');
-      terminal.show();
-      terminal.sendText(`cd "${projectRoot}" && node .agentic/grafo/impact-analyzer.cjs analyze "${relPath}"`);
-    })
-  );
+  reg('agentickdd.indexAST', function() {
+    runTerm('Agentic — AST', 'cd "' + projectRoot + '" && node .agentic/grafo/ast-indexer.cjs index');
+  });
 
-  // Crear spec
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentickdd.createSpec', async () => {
-      const moduleName = await vscode.window.showInputBox({ prompt: 'Nombre del módulo para el spec...' });
-      if (!moduleName) return;
-      const tipo = await vscode.window.showQuickPick(['feature', 'bugfix'], { placeHolder: 'Tipo de spec' });
-      if (!tipo) return;
-      const terminal = vscode.window.createTerminal('Agentic KDD — Spec');
-      terminal.show();
-      terminal.sendText(`cd "${projectRoot}" && node .agentic/grafo/spec-manager.cjs create "${moduleName}" ${tipo === 'bugfix' ? '--bugfix' : ''}`);
-    })
-  );
+  reg('agentickdd.queryMemory', async function() {
+    var q = await vscode.window.showInputBox({ prompt: 'Search KDD memory...' });
+    if (!q) return;
+    runTerm('Agentic — Memory', 'cd "' + projectRoot + '" && node .agentic/grafo/kdd-memory.cjs recall "' + q + '"');
+  });
 
-  // Sincronizar ADRs y gotchas
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agentickdd.syncKnowledge', async () => {
-      const terminal = vscode.window.createTerminal('Agentic KDD — Knowledge Sync');
-      terminal.show();
-      terminal.sendText(`cd "${projectRoot}" && node .agentic/grafo/adr-ingestor.cjs ingest && node .agentic/grafo/knowledge-ingestor.cjs ingest`);
-    })
-  );
+  reg('agentickdd.analyzeImpact', function() {
+    var f = vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.uri.fsPath;
+    if (!f) { vscode.window.showWarningMessage('Open a file first'); return; }
+    var rel = path.relative(projectRoot, f);
+    runTerm('Agentic — Impact', 'cd "' + projectRoot + '" && node .agentic/grafo/impact-analyzer.cjs analyze "' + rel + '"');
+  });
 
-  // ── 4. File Save Hook (AST auto-index) ─────────────────────────────────
-  const config = vscode.workspace.getConfiguration('agentickdd');
-  if (config.get('astEnabled')) {
+  reg('agentickdd.blastRadius', function() {
+    var f = vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.uri.fsPath;
+    if (!f) { vscode.window.showWarningMessage('Open a file first'); return; }
+    var rel = path.relative(projectRoot, f);
+    runTerm('Agentic — Blast', 'cd "' + projectRoot + '" && node .agentic/grafo/contract-guard.cjs blast "' + rel + '"');
+  });
+
+  reg('agentickdd.createSpec', async function() {
+    var mod = await vscode.window.showInputBox({ prompt: 'Module name...' });
+    if (!mod) return;
+    var tipo = await vscode.window.showQuickPick(['feature', 'bugfix'], { placeHolder: 'Spec type' });
+    if (!tipo) return;
+    runTerm('Agentic — Spec',
+      'cd "' + projectRoot + '" && node .agentic/grafo/spec-manager.cjs create "' + mod + '"' + (tipo === 'bugfix' ? ' --bugfix' : '')
+    );
+  });
+
+  reg('agentickdd.syncKnowledge', function() {
+    runTerm('Agentic — Sync',
+      'cd "' + projectRoot + '" && node .agentic/grafo/adr-ingestor.cjs ingest && node .agentic/grafo/knowledge-ingestor.cjs ingest'
+    );
+  });
+
+  reg('agentickdd.contractsStatus', function() {
+    runTerm('Agentic — Contracts', 'cd "' + projectRoot + '" && node .agentic/grafo/contract-guard.cjs status');
+  });
+
+  reg('agentickdd.historial', function() {
+    runTerm('Agentic — Historial', 'cd "' + projectRoot + '" && node .agentic/grafo/session-guard.cjs historial');
+  });
+
+  reg('agentickdd.health', function() {
+    runTerm('Agentic — Health', 'cd "' + projectRoot + '" && node .agentic/grafo/health-check.cjs');
+  });
+
+  reg('agentickdd.detectPatterns', function() {
+    runTerm('Agentic — Patterns', 'cd "' + projectRoot + '" && node .agentic/grafo/autonomous-decision.cjs queue');
+  });
+
+  reg('agentickdd.report', function() {
+    runTerm('Agentic — Report', 'cd "' + projectRoot + '" && node .agentic/grafo/effectiveness-report.cjs');
+  });
+
+  // 5. File save hook
+  var cfg = vscode.workspace.getConfiguration('agentickdd');
+  if (cfg.get('astEnabled')) {
     context.subscriptions.push(
-      vscode.workspace.onDidSaveTextDocument((document) => {
-        const filePath = document.uri.fsPath;
-        const ext = path.extname(filePath);
-        const indexableExts = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs'];
-        if (!indexableExts.includes(ext)) return;
-        if (filePath.includes('node_modules') || filePath.includes('.agentic')) return;
-
-        // Indexar el archivo guardado (silencioso, en background)
+      vscode.workspace.onDidSaveTextDocument(function(doc) {
+        var fp  = doc.uri.fsPath;
+        var ext = path.extname(fp);
+        var ok  = ['.ts','.tsx','.js','.jsx','.py','.go','.rs','.php'];
+        if (ok.indexOf(ext) < 0) return;
+        if (fp.indexOf('node_modules') >= 0 || fp.indexOf('.agentic') >= 0) return;
         try {
-          const relPath = path.relative(projectRoot, filePath);
+          var rel = path.relative(projectRoot, fp);
           execSync(
-            `node .agentic/grafo/ast-indexer.cjs index "${path.dirname(relPath)}"`,
+            'node .agentic/grafo/ast-indexer.cjs index "' + path.dirname(rel) + '"',
             { cwd: projectRoot, timeout: 10000, stdio: 'ignore' }
           );
-        } catch {}
+          provider.refresh();
+        } catch(e) {}
       })
     );
   }
-
-  vscode.window.setStatusBarMessage('$(brain) Agentic KDD activo', 3000);
 }
 
 function deactivate() {}
 
-// ─── DASHBOARD WEBVIEW PROVIDER ───────────────────────────────────────────────
+// ─── SIDEBAR PROVIDER ─────────────────────────────────────────────────────────
 
-class AgenticDashboardProvider {
-  constructor(extensionUri, projectRoot) {
-    this.extensionUri = extensionUri;
-    this.projectRoot  = projectRoot;
-    this._view = null;
-  }
-
-  resolveWebviewView(webviewView) {
-    this._view = webviewView;
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [this.extensionUri],
-    };
-    webviewView.webview.html = this._getHtmlContent();
-
-    // Actualizar cada 30 segundos
-    const interval = setInterval(() => {
-      if (webviewView.visible) {
-        webviewView.webview.postMessage({ type: 'refresh' });
-      }
-    }, 30000);
-    webviewView.onDidDispose(() => clearInterval(interval));
-  }
-
-  show() {
-    vscode.commands.executeCommand('agentickdd.dashboard.focus');
-  }
-
-  _getHtmlContent() {
-    // Reutiliza el HTML del dashboard existente (.agentic/dashboard.cjs)
-    // En producción, genera el HTML via dashboard.cjs y lo inyecta aquí
-    const dashPath = path.join(this.projectRoot, 'dashboard.cjs');
-    const hasDashboard = require('fs').existsSync(dashPath);
-
-    return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agentic KDD</title>
-  <style>
-    body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 12px; }
-    h3 { color: var(--vscode-textLink-foreground); margin-bottom: 8px; }
-    .btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-           border: none; padding: 6px 12px; cursor: pointer; border-radius: 3px; margin: 4px; }
-    .btn:hover { background: var(--vscode-button-hoverBackground); }
-    .status { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 8px; }
-  </style>
-</head>
-<body>
-  <h3>⚡ Agentic KDD</h3>
-  <div>
-    <button class="btn" onclick="vscode.postMessage({cmd:'index'})">🗺️ Index AST</button>
-    <button class="btn" onclick="vscode.postMessage({cmd:'impact'})">🔍 Impact</button>
-    <button class="btn" onclick="vscode.postMessage({cmd:'sync'})">📄 Sync Knowledge</button>
-    <button class="btn" onclick="vscode.postMessage({cmd:'dashboard'})">📊 Dashboard</button>
-  </div>
-  <p class="status">${hasDashboard ? '✅ Framework instalado' : '⚠️ Ejecutar akdd init en el proyecto'}</p>
-  <script>
-    const vscode = acquireVsCodeApi();
-    window.addEventListener('message', e => {
-      if (e.data.type === 'refresh') { /* actualizar stats */ }
-    });
-  </script>
-</body>
-</html>`;
-  }
+function AgenticSidebarProvider(extensionUri, projectRoot) {
+  this.extensionUri = extensionUri;
+  this.projectRoot  = projectRoot;
+  this._view        = null;
+  this._timer       = null;
 }
+
+AgenticSidebarProvider.prototype.resolveWebviewView = function(webviewView) {
+  var self = this;
+  this._view = webviewView;
+
+  webviewView.webview.options = {
+    enableScripts: true,
+    localResourceRoots: [this.extensionUri],
+  };
+
+  webviewView.webview.html = this._buildHtml();
+
+  webviewView.webview.onDidReceiveMessage(function(msg) {
+    var root = self.projectRoot;
+    function runTerm(name, cmd) {
+      var t = vscode.window.createTerminal(name);
+      t.show();
+      t.sendText(cmd);
+    }
+    switch (msg.cmd) {
+      case 'health':     vscode.commands.executeCommand('agentickdd.health'); break;
+      case 'contracts':  vscode.commands.executeCommand('agentickdd.contractsStatus'); break;
+      case 'historial':  vscode.commands.executeCommand('agentickdd.historial'); break;
+      case 'report':     vscode.commands.executeCommand('agentickdd.report'); break;
+      case 'dashboard':  runTerm('Agentic', 'cd "' + root + '" && node dashboard.cjs'); break;
+      case 'search':
+        vscode.window.showInputBox({ prompt: 'Search KDD memory...' }).then(function(q) {
+          if (q) runTerm('Memory', 'cd "' + root + '" && node .agentic/grafo/kdd-memory.cjs recall "' + q + '"');
+        });
+        break;
+    }
+  });
+
+  this._timer = setInterval(function() {
+    if (webviewView.visible) self.refresh();
+  }, 60000);
+
+  webviewView.onDidDispose(function() {
+    clearInterval(self._timer);
+  });
+};
+
+AgenticSidebarProvider.prototype.refresh = function() {
+  if (this._view) this._view.webview.html = this._buildHtml();
+};
+
+AgenticSidebarProvider.prototype._getStats = function() {
+  var root = this.projectRoot;
+  var db   = path.join(root, '.agentic/memoria.db');
+  var s    = { installed: false, nodes: 0, high: 0, cycles: 0, protected: 0, violations: 0 };
+
+  if (!fs.existsSync(db)) return s;
+  s.installed = true;
+
+  try {
+    var res = execSync(
+      'node -e "try{' +
+      'var D=require(\'better-sqlite3\');' +
+      'var db=new D(\'' + db.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',{readonly:true});' +
+      'var r={' +
+        'n:db.prepare(\'SELECT COUNT(*) as n FROM nodos WHERE estado=\\\'ACTIVO\\\'\').get().n,' +
+        'h:db.prepare(\'SELECT COUNT(*) as n FROM nodos WHERE confianza=\\\'ALTA\\\' AND estado=\\\'ACTIVO\\\'\').get().n,' +
+        'c:0,p:0,v:0' +
+      '};' +
+      'try{r.c=db.prepare(\'SELECT COUNT(*) as n FROM ciclos\').get().n}catch(e){}' +
+      'try{r.p=db.prepare(\'SELECT COUNT(*) as n FROM verified_contracts WHERE status=\\\'protected\\\'\').get().n}catch(e){}' +
+      'try{r.v=db.prepare(\'SELECT COUNT(*) as n FROM contract_violations WHERE recovered=0\').get().n}catch(e){}' +
+      'process.stdout.write(JSON.stringify(r));db.close()' +
+      '}catch(e){process.stdout.write(JSON.stringify({n:0,h:0,c:0,p:0,v:0}))}"',
+      { cwd: root, timeout: 5000, stdio: 'pipe' }
+    ).toString().trim();
+
+    var parsed = JSON.parse(res);
+    s.nodes      = parsed.n || 0;
+    s.high       = parsed.h || 0;
+    s.cycles     = parsed.c || 0;
+    s.protected  = parsed.p || 0;
+    s.violations = parsed.v || 0;
+  } catch(e) {}
+
+  return s;
+};
+
+AgenticSidebarProvider.prototype._buildHtml = function() {
+  var s   = this._getStats();
+  var dot = s.violations > 0 ? '#f87171' : s.protected > 0 ? '#34d399' : '#fbbf24';
+  var lbl = s.violations > 0 ? 'Violations detected' : s.protected > 0 ? 'Contracts active' : 'No contracts yet';
+
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);font-size:12px;padding:10px;background:var(--vscode-sideBar-background)}' +
+    '.hdr{display:flex;align-items:center;gap:6px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--vscode-sideBarSectionHeader-border,#333)}' +
+    '.ttl{font-size:13px;font-weight:600}' +
+    '.bdg{font-size:10px;padding:1px 6px;border-radius:10px;background:#7F77DD22;color:#9f99e8}' +
+    '.warn{padding:10px;background:#3d2f0030;border:1px solid #fbbf24;border-radius:4px;margin-bottom:10px;font-size:11px}' +
+    '.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}' +
+    '.card{background:var(--vscode-input-background);border-radius:4px;padding:8px;text-align:center;border:1px solid var(--vscode-input-border,#333)}' +
+    '.val{font-size:18px;font-weight:700;line-height:1.2}' +
+    '.lbl{font-size:10px;color:var(--vscode-descriptionForeground);margin-top:2px}' +
+    '.pur{color:#9f99e8}.grn{color:#34d399}.amb{color:#fbbf24}.red{color:#f87171}' +
+    '.sbar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--vscode-input-background);border-radius:4px;margin-bottom:10px;font-size:11px}' +
+    '.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}' +
+    '.btns{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}' +
+    '.btn{background:var(--vscode-button-secondaryBackground,#2d2d2d);color:var(--vscode-button-secondaryForeground,#ccc);border:1px solid var(--vscode-button-border,#444);padding:5px 8px;cursor:pointer;border-radius:3px;font-size:11px;text-align:center}' +
+    '.btn:hover{background:var(--vscode-button-secondaryHoverBackground,#3d3d3d)}' +
+    '.pri{background:#7F77DD;color:#fff;border-color:#7F77DD;grid-column:1/-1}' +
+    '.pri:hover{background:#9f99e8}' +
+    '.ft{font-size:10px;color:var(--vscode-descriptionForeground);text-align:center;margin-top:8px}' +
+    '</style></head><body>' +
+    '<div class="hdr"><span>⚡</span><span class="ttl">Agentic KDD</span><span class="bdg">v0.2.0</span></div>' +
+    (!s.installed ? '<div class="warn">⚠️ Not initialized.<br>Run: <strong>akdd init</strong></div>' : '') +
+    '<div class="grid">' +
+      '<div class="card"><div class="val pur">' + s.nodes + '</div><div class="lbl">Memory nodes</div></div>' +
+      '<div class="card"><div class="val grn">' + s.high + '</div><div class="lbl">HIGH rules</div></div>' +
+      '<div class="card"><div class="val amb">' + s.cycles + '</div><div class="lbl">Cycles run</div></div>' +
+      '<div class="card"><div class="val ' + (s.violations > 0 ? 'red' : 'grn') + '">' + s.protected + '</div><div class="lbl">Protected contracts</div></div>' +
+    '</div>' +
+    '<div class="sbar"><div class="dot" style="background:' + dot + '"></div><span>' + lbl + '</span></div>' +
+    '<div class="btns">' +
+      '<button class="btn pri" onclick="s(\'dashboard\')">📊 Open Full Dashboard</button>' +
+      '<button class="btn" onclick="s(\'contracts\')">🛡️ Contracts</button>' +
+      '<button class="btn" onclick="s(\'historial\')">📋 Historial</button>' +
+      '<button class="btn" onclick="s(\'search\')">🔍 Search Memory</button>' +
+      '<button class="btn" onclick="s(\'report\')">📈 Report</button>' +
+      '<button class="btn" onclick="s(\'health\')">🩺 Health</button>' +
+    '</div>' +
+    '<div class="ft">' + (s.installed ? s.nodes + ' nodes · ' + s.cycles + ' cycles' : 'Run akdd init to start') + '</div>' +
+    '<script>const vscode=acquireVsCodeApi();function s(c){vscode.postMessage({cmd:c})}</script>' +
+    '</body></html>';
+};
 
 module.exports = { activate, deactivate };
