@@ -23,6 +23,40 @@
 
 ---
 
+
+## Benchmark results
+
+Early benchmark — 12 phases, reproducible by anyone.
+
+**Product tested:** Task Management REST API (Node.js / TypeScript / Express / Prisma)  
+**Setup:** Two Cursor windows, same project, same prompts — one with Agentic KDD (`aa:` prefix), one without.
+
+```
+┌─────────────────────────────────┬──────────┬──────────┬──────────┐
+│ Metric                          │ Without  │  With    │  Change  │
+├─────────────────────────────────┼──────────┼──────────┼──────────┤
+│ Errors per phase                │     1.3  │     1.0  │  -23%    │
+│ Phases with repeated error      │       5  │       0  │ -100%    │
+│ Steps to complete per phase     │     2.0  │     1.7  │  -15%    │
+│ Tests passing first try (%)     │      94  │      79  │  -16pp   │
+└─────────────────────────────────┴──────────┴──────────┴──────────┘
+```
+
+**The number that matters:** Agentic KDD eliminated 100% of repeated errors across 12 development phases. An agent without memory repeated known error patterns 5 times. With Agentic KDD: 0 repetitions.
+
+**On the -16pp first-try rate:** Agentic KDD implemented more complete solutions — catching security issues, repairing accumulated bugs, detecting spec drift — which generated more tests and more edge cases. The agent without memory implemented the minimum asked and moved on. More tests failing is a sign of deeper analysis, not worse performance.
+
+**Notable findings by phase:**
+- Phase 5 (intentional auth bug): Agentic showed a "design consideration" warning *before* touching the critical file. The stateless agent implemented blindly.
+- Phase 7 (regression prevention): Preservation Gate protected a fix from being overwritten when the same file was touched again.
+- Phase 11 (pattern evolution): Agentic detected and queued 2 additional occurrences of the same bug pattern without being asked.
+- Phase 12 (spec drift): Agentic detected that `password: z.string().min(3)` contradicted the original spec (`min(8)`) and corrected it autonomously.
+
+Reproduce it: **[github.com/Adrianlpz211/Agentic-KDD-Benchmark](https://github.com/Adrianlpz211/Agentic-KDD-Benchmark)**  
+Full results with phase-by-phase breakdown: [`benchmark-results-12fases.md`](docs/benchmark-results-12fases.md)
+
+---
+
 ## The problem
 
 Every AI coding tool today has the same fundamental flaw: **the agent forgets everything when you close the chat.**
@@ -586,8 +620,8 @@ your-project/
 
 | Package | Version | Description |
 |---------|---------|-------------|
-| [`agentic-kdd`](https://www.npmjs.com/package/agentic-kdd) | 3.5.1 | CLI — 50+ commands |
-| [`agentic-kdd-mcp`](https://www.npmjs.com/package/agentic-kdd-mcp) | 2.5.1 | MCP server — 53 tools |
+| [`agentic-kdd`](https://www.npmjs.com/package/agentic-kdd) | 3.4.0 | CLI — 50+ commands |
+| [`agentic-kdd-mcp`](https://www.npmjs.com/package/agentic-kdd-mcp) | 2.4.0 | MCP server — 53 tools |
 
 ---
 
