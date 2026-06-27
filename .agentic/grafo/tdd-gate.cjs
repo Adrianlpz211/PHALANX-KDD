@@ -32,6 +32,10 @@ const TEST_COMMANDS = [
   'npx jest --passWithNoTests',
   'npx vitest run',
   'npx jest',
+  // Python projects
+  'pytest',
+  'python -m pytest',
+  'python3 -m pytest',
 ];
 
 // ─── TEST RUNNER ──────────────────────────────────────────────────────────────
