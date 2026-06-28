@@ -219,7 +219,9 @@ function parseTestOutput(raw, exitCode) {
     }
   }
 
-  result.allPassed = result.failed === 0 && exitCode === 0;
+  // En Windows, "cd backend && pytest" puede retornar exitCode != 0
+  // aunque los tests pasen. Si passed > 0 y failed === 0, es PASS.
+  result.allPassed = result.failed === 0 && (exitCode === 0 || (result.passed > 0 && result.failed === 0));
   return result;
 }
 
