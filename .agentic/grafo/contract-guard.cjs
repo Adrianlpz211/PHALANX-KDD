@@ -842,42 +842,31 @@ function registerPassingTests(db, params) {
   if (!db || !passed || passed === 0) return;
 
   try {
-    // Ensure verified_contracts table exists
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS verified_contracts (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        test_file TEXT,
-        module TEXT,
-        status TEXT DEFAULT 'candidate',
-        pass_count INTEGER DEFAULT 0,
-        failure_count INTEGER DEFAULT 0,
-        last_passed_at TEXT,
-        updated_at TEXT DEFAULT (datetime('now')),
-        created_at TEXT DEFAULT (datetime('now'))
-      )
-    `);
+    // Use same schema as migrateSchema — verification_count not pass_count
+    migrateSchema(db);
 
     const contractId = `contract_${area || 'global'}_${Date.now()}`;
     const existing = db.prepare(
-      "SELECT id, pass_count, status FROM verified_contracts WHERE module = ? AND status != 'invalidated' LIMIT 1"
+      "SELECT id, verification_count, status FROM verified_contracts WHERE module = ? AND status != 'invalidated' LIMIT 1"
     ).get(area || 'global');
 
     if (existing) {
-      const newCount = (existing.pass_count || 0) + 1;
+      const newCount = (existing.verification_count || 0) + 1;
       const newStatus = newCount >= 7 ? 'protected' : newCount >= 3 ? 'verified' : 'candidate';
       db.prepare(`
         UPDATE verified_contracts SET
-          pass_count = ?,
+          verification_count = ?,
+          consecutive_passes = consecutive_passes + 1,
           status = ?,
-          last_passed_at = datetime('now'),
+          last_verified = datetime('now'),
           updated_at = datetime('now')
         WHERE id = ?
       `).run(newCount, newStatus, existing.id);
     } else {
       db.prepare(`
-        INSERT OR IGNORE INTO verified_contracts (id, name, test_file, module, status, pass_count, last_passed_at)
-        VALUES (?, ?, ?, ?, 'candidate', 1, datetime('now'))
+        INSERT OR IGNORE INTO verified_contracts
+          (id, name, test_file, module, status, verification_count, consecutive_passes, last_verified)
+        VALUES (?, ?, ?, ?, 'candidate', 1, 1, datetime('now'))
       `).run(contractId, `${area || 'global'} tests (${passed}/${total})`, command || 'npm test', area || 'global');
     }
   } catch(e) { /* silent */ }
