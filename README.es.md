@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/phalanx-logo.svg" alt="Phalanx KDD" width="600">
+<img src="assets/logo.svg" alt="Agentix KDD" width="600">
 
 ### La armadura de tu IA de código.
 
@@ -20,9 +20,9 @@
 
 ## Qué es
 
-**Phalanx KDD** no es otra IA que programa por ti. Es la **armadura** que se le pone a la IA que ya usas — Claude Code o Cursor — para que **recuerde, no rompa lo que funcionaba, y no se contradiga**.
+**Agentix KDD** no es otra IA que programa por ti. Es la **armadura** que se le pone a la IA que ya usas — Claude Code o Cursor — para que **recuerde, no rompa lo que funcionaba, y no se contradiga**.
 
-Vive **dentro de tu proyecto**: lee tu código, guarda cada decisión y cada error en una memoria persistente, y usa todo eso para que la siguiente tarea sea más segura que la anterior. Tú sigues con tu editor de siempre; Phalanx lo blinda por debajo.
+Vive **dentro de tu proyecto**: lee tu código, guarda cada decisión y cada error en una memoria persistente, y usa todo eso para que la siguiente tarea sea más segura que la anterior. Tú sigues con tu editor de siempre; Agentix lo blinda por debajo.
 
 > *KDD = Knowledge-Driven Development — desarrollo guiado por el conocimiento acumulado del propio proyecto. (Paquete npm: `agentic-kdd`.)*
 
@@ -32,7 +32,7 @@ Vive **dentro de tu proyecto**: lee tu código, guarda cada decisión y cada err
 
 Abres Cursor o Claude Code. Le explicas tu proyecto *otra vez*. La IA empieza de cero *otra vez*. Rompe algo que ya funcionaba *otra vez*. Cambia una regla de negocio sin acordarse de por qué estaba así.
 
-No estás programando — estás cuidando el contexto a mano. **Phalanx se encarga de eso.**
+No estás programando — estás cuidando el contexto a mano. **Agentix se encarga de eso.**
 
 ---
 
@@ -48,7 +48,7 @@ No estás programando — estás cuidando el contexto a mano. **Phalanx se encar
 
 ## Cómo funciona
 
-Phalanx usa una **memoria de 4 capas** (arquitectura CoALA) guardada en **SQLite dentro de tu proyecto** — tuya, sin nube, sin suscripción:
+Agentix usa una **memoria de 4 capas** (arquitectura CoALA) guardada en **SQLite dentro de tu proyecto** — tuya, sin nube, sin suscripción:
 
 ```
 Working    → contexto de la tarea actual
@@ -79,7 +79,7 @@ akdd init
 aa: configurar
 ```
 
-Listo. Phalanx lee tu proyecto y se configura solo. A partir de ahí, cada tarea empieza con `aa:`.
+Listo. Agentix lee tu proyecto y se configura solo. A partir de ahí, cada tarea empieza con `aa:`.
 
 ---
 
@@ -109,7 +109,7 @@ También expone **23 herramientas MCP** para clientes compatibles (Claude Code, 
 
 ## Resultados de benchmark
 
-En una prueba de 19 fases construyendo un SaaS multi-tenant real (mismo modelo Claude en ambos modos), con vs. sin Phalanx:
+En una prueba de 19 fases construyendo un SaaS multi-tenant real (mismo modelo Claude en ambos modos), con vs. sin Agentix:
 
 | Métrica | Sin | Con |
 |---------|-----|-----|
@@ -124,7 +124,7 @@ En una prueba de 19 fases construyendo un SaaS multi-tenant real (mismo modelo C
 
 ## Estado y transparencia
 
-Phalanx es software **joven y en evolución**. Se auditaron los 48 archivos del motor y se repararon **30+ bugs** (memoria, gates, búsqueda vectorial, publicación). Aun así, **una auditoría no certifica cero defectos** — si encuentras algo, abre un issue.
+Agentix es software **joven y en evolución**. Se auditaron los 48 archivos del motor y se repararon **30+ bugs** (memoria, gates, búsqueda vectorial, publicación). Aun así, **una auditoría no certifica cero defectos** — si encuentras algo, abre un issue.
 
 Lo que **sí funciona hoy**: el pipeline `aa:`, la memoria persistente con búsqueda semántica real, los gates (Spec / Regression / TDD / Security), el dashboard con métricas reales, el servidor MCP y la coordinación multi-instancia.
 
@@ -138,6 +138,6 @@ MIT — úsalo, forkéalo, constrúyelo.
 
 Hecho por [@Adrianlpz211](https://github.com/Adrianlpz211)
 
-*Si Phalanx te ahorró tiempo → ⭐*
+*Si Agentix te ahorró tiempo → ⭐*
 
 </div>

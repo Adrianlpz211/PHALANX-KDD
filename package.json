@@ -32,9 +32,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Adrianlpz211/PHALANX-KDD.git"
+    "url": "git+https://github.com/Adrianlpz211/agentix-kdd.git"
   },
-  "homepage": "https://github.com/Adrianlpz211/PHALANX-KDD",
+  "homepage": "https://github.com/Adrianlpz211/agentix-kdd",
   "engines": {
     "node": ">=18.0.0"
   },
