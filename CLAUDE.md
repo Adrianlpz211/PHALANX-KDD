@@ -454,3 +454,16 @@ Luego proceder con el pipeline completo como si el dev hubiera escrito `aa:`.
 # ============================================================
 # INSTRUCCIONES DEL PROYECTO — agregar las tuyas aquí abajo
 # ============================================================
+
+## CONTRACT GUARD — Registro automático post-TDD Gate
+
+Después de cada TDD Gate PASS en cualquier ciclo `aa:`, ejecutar en terminal:
+
+```
+node .agentic/grafo/tdd-gate.cjs run [area]
+```
+
+Donde `[area]` es el nombre del módulo implementado (ej: `clients`, `auth`, `invoices`).
+
+**Esto es obligatorio.** Sin este paso los contratos nunca se acumulan.
+El pipeline no puede continuar a Memoria si este comando no se ejecuta después del TDD Gate PASS.
