@@ -90,8 +90,9 @@ function extraerUbicacion(lineas) {
 function yaExisteEnMemoria(titulo) {
   if (!fs.existsSync(ERRORES_PATH)) return false;
   const contenido = fs.readFileSync(ERRORES_PATH, 'utf8');
-  // Comparar por similaridad de título (primeras 40 chars)
-  const tituloShort = titulo.slice(0, 40).toLowerCase();
+  // Comparar por prefijo más distintivo (100 chars) — 40 colapsaba errores distintos
+  // que compartían el inicio (p.ej. "Type 'X' is not assignable to type...")
+  const tituloShort = titulo.slice(0, 100).toLowerCase();
   return contenido.toLowerCase().includes(tituloShort);
 }
 

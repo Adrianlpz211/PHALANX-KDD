@@ -511,8 +511,15 @@ rl.on('line', async (line) => {
         sendError(id, -32601, `Tool '${name}' no encontrada`);
         return;
       }
+      // Las tools dinámicas (v3.2+/CLI/v3.3+/autonomous/v3.4+/v3.5) se pushean a TOOLS
+      // sin handler; sus handlers viven en TOOL_MAP. Resolver desde ambos.
+      const handler = tool.handler || (TOOL_MAP[name] && TOOL_MAP[name].handler);
+      if (!handler) {
+        sendError(id, -32603, `Tool '${name}' sin handler`);
+        return;
+      }
       try {
-        const result = await tool.handler(args);
+        const result = await handler(args);
         sendResponse(id, {
           content: [{ type: 'text', text: typeof result === 'string' ? result : JSON.stringify(result, null, 2) }],
         });

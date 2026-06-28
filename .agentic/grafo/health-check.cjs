@@ -248,10 +248,10 @@ const CHECKS = [
     categoria: 'discoverability',
     check: (root) => {
       const p = path.join(root, '.agentic', 'llms.txt');
-      if (!fs.existsSync(p)) return { ok: false, msg: 'llms.txt no generado — ejecutar: akdd sync' };
+      if (!fs.existsSync(p)) return { ok: false, msg: 'llms.txt no generado — ejecutar: akdd llms' };
       return { ok: true, msg: 'llms.txt presente' };
     },
-    fix: 'akdd sync',
+    fix: 'akdd llms',
   },
   // ── v3.2: knowledge-graph.json ─────────────────────────────────────────────
   {
@@ -260,13 +260,13 @@ const CHECKS = [
     categoria: 'discoverability',
     check: (root) => {
       const p = path.join(root, '.agentic', 'knowledge-graph.json');
-      if (!fs.existsSync(p)) return { ok: false, msg: 'knowledge-graph.json no existe — ejecutar: akdd sync' };
+      if (!fs.existsSync(p)) return { ok: false, msg: 'knowledge-graph.json no existe — ejecutar: akdd llms' };
       try {
         const g = JSON.parse(fs.readFileSync(p, 'utf8'));
         return { ok: true, msg: `${g.stats?.total_nodes || 0} nodos, ${g.stats?.total_edges || 0} edges` };
-      } catch { return { ok: false, msg: 'knowledge-graph.json inválido — ejecutar: akdd sync' }; }
+      } catch { return { ok: false, msg: 'knowledge-graph.json inválido — ejecutar: akdd llms' }; }
     },
-    fix: 'akdd sync',
+    fix: 'akdd llms',
   },
 ];
 

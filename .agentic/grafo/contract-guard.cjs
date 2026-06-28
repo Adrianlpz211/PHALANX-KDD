@@ -847,21 +847,27 @@ function registerPassingTests(db, params) {
 
     const contractId = `contract_${area || 'global'}_${Date.now()}`;
     const existing = db.prepare(
-      "SELECT id, verification_count, status FROM verified_contracts WHERE module = ? AND status != 'invalidated' LIMIT 1"
+      "SELECT id, verification_count, consecutive_passes, failure_count, status FROM verified_contracts WHERE module = ? AND status != 'invalidated' LIMIT 1"
     ).get(area || 'global');
 
     if (existing) {
-      const newCount = (existing.verification_count || 0) + 1;
-      const newStatus = newCount >= 7 ? 'protected' : newCount >= 3 ? 'verified' : 'candidate';
+      const newCount  = (existing.verification_count || 0) + 1;
+      const newConsec = (existing.consecutive_passes || 0) + 1;
+      const failures  = existing.failure_count || 0;
+      // Promover por pases CONSECUTIVOS (no por el total acumulado, que nunca decrece).
+      // 'protected' solo si además no acumula fallos.
+      let newStatus = 'candidate';
+      if (newConsec >= 7 && failures === 0) newStatus = 'protected';
+      else if (newConsec >= 3) newStatus = 'verified';
       db.prepare(`
         UPDATE verified_contracts SET
           verification_count = ?,
-          consecutive_passes = consecutive_passes + 1,
+          consecutive_passes = ?,
           status = ?,
           last_verified = datetime('now'),
           updated_at = datetime('now')
         WHERE id = ?
-      `).run(newCount, newStatus, existing.id);
+      `).run(newCount, newConsec, newStatus, existing.id);
     } else {
       db.prepare(`
         INSERT OR IGNORE INTO verified_contracts

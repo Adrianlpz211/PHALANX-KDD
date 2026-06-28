@@ -219,9 +219,15 @@ function parseTestOutput(raw, exitCode) {
     }
   }
 
-  // En Windows, "cd backend && pytest" puede retornar exitCode != 0
-  // aunque los tests pasen. Si passed > 0 y failed === 0, es PASS.
-  result.allPassed = result.failed === 0 && (exitCode === 0 || (result.passed > 0 && result.failed === 0));
+  // Si no se reconoció NINGÚN resultado de test, NO asumir PASS (gate de calidad):
+  // un exitCode 0 espurio (común con `cmd /c` en Windows) no debe dar verde con tests rotos.
+  if (result.passed === 0 && result.failed === 0 && result.total === 0) {
+    result.allPassed = false;
+  } else {
+    // En Windows, "cd backend && pytest" puede retornar exitCode != 0 aunque los tests pasen.
+    // Si passed > 0 y failed === 0, es PASS.
+    result.allPassed = result.failed === 0 && (exitCode === 0 || result.passed > 0);
+  }
   return result;
 }
 
@@ -366,16 +372,16 @@ function runSelfHealingLoop(opts) {
         const contractGuardPath = require('path').join(__dirname, 'contract-guard.cjs');
         const cg = require(contractGuardPath);
         const dbPath = require('path').join(projectRoot || process.cwd(), '.agentic/memoria.db');
-        // Add project node_modules to require path so better-sqlite3 can be found
-        const projNodeModules = require('path').join(projectRoot || process.cwd(), 'node_modules');
-        if (!require.resolve.paths('better-sqlite3').includes(projNodeModules)) {
-          require('module').Module._nodeModulePaths(projNodeModules).forEach(p => {
-            if (!require.resolve.paths('').includes(p)) require.resolve.paths('').push(p);
-          });
-          module.paths.unshift(projNodeModules);
-        }
+        // Cargar better-sqlite3 desde el node_modules del PROYECTO vía createRequire
+        // (la manipulación de require.resolve.paths anterior no funcionaba de forma fiable)
         const DB = (() => {
-          try { return new (require('better-sqlite3'))(dbPath); } catch { return null; }
+          try {
+            const { createRequire } = require('module');
+            const projReq = createRequire(require('path').join(projectRoot || process.cwd(), 'package.json'));
+            return new (projReq('better-sqlite3'))(dbPath);
+          } catch {
+            try { return new (require('better-sqlite3'))(dbPath); } catch { return null; }
+          }
         })();
         if (DB && cg && typeof cg.registerPassingTests === 'function') {
           cg.registerPassingTests(DB, { passed: result.passed, total: result.total, area: area || 'global', command });

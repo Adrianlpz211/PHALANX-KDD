@@ -128,6 +128,11 @@ function runTestFile(testPattern, projectRoot) {
       fs.existsSync(path.join(projectRoot, 'requirements.txt')) ||
       fs.existsSync(path.join(projectRoot, 'backend', 'requirements.txt'));
 
+    // Sanitizar testPattern: solo caracteres válidos de ruta/patrón de test.
+    // Elimina metacaracteres de shell ("`$;&|()<>) para evitar inyección de comandos,
+    // ya que testPattern proviene de la DB (nombres de archivo) e se interpola en el shell.
+    const safePattern = String(testPattern || '').replace(/[^A-Za-z0-9._/\\*\- ]/g, '');
+
     let cmd;
     if (isPython) {
       // testPattern for pytest = test file or -k expression
@@ -135,7 +140,7 @@ function runTestFile(testPattern, projectRoot) {
         ? 'backend' : '.';
       cmd = `cd ${backendDir} && pytest -x -v 2>&1`;
     } else {
-      cmd = `npm test -- --testPathPattern="${testPattern}" 2>&1`;
+      cmd = `npm test -- --testPathPattern="${safePattern}" 2>&1`;
     }
 
     const result = require('child_process').spawnSync(

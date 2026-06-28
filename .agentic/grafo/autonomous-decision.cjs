@@ -353,7 +353,7 @@ function crossModuleCheck(db, errorSignatures, currentFiles) {
         WHERE tipo = 'error'
           AND (titulo LIKE ? OR contenido LIKE ?)
           AND estado = 'ACTIVO'
-          AND area NOT IN (${currentAreas.map(() => '?').join(',')})
+          ${currentAreas.length ? `AND area NOT IN (${currentAreas.map(() => '?').join(',')})` : ''}
         ORDER BY aplicado DESC
         LIMIT 5
       `).all(`%${sig}%`, `%${sig}%`, ...currentAreas)
@@ -403,6 +403,10 @@ function getBlastLevel(db, targetFiles) {
       "SELECT * FROM verified_contracts WHERE status IN ('protected','verified')"
     ).all();
 
+    // Dedup por id de contrato: un mismo contrato no debe contarse varias veces
+    // aunque coincida con varios archivos del changeset (antes inflaba el blast).
+    const atRiskIds = new Set();
+    const protectedIds = new Set();
     targetFiles.forEach(file => {
       const basename = path.basename(file);
       allContracts.forEach(c => {
@@ -410,11 +414,13 @@ function getBlastLevel(db, targetFiles) {
         const isAtRisk = testFile.includes(basename) ||
           (c.module && file.toLowerCase().includes(c.module.toLowerCase()));
         if (isAtRisk) {
-          contractsAtRisk++;
-          if (c.status === 'protected') protectedAtRisk++;
+          atRiskIds.add(c.id);
+          if (c.status === 'protected') protectedIds.add(c.id);
         }
       });
     });
+    contractsAtRisk = atRiskIds.size;
+    protectedAtRisk = protectedIds.size;
   } catch {}
 
   const level = contractsAtRisk === 0   ? 'LOW'

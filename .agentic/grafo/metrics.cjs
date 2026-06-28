@@ -61,8 +61,8 @@ function computeCycleMetrics(db) {
   // Memoria aplicada
   let patronesAplicados = 0, erroresEvitados = 0;
   ciclos.forEach(c => {
-    try { patronesAplicados += JSON.parse(c.patrones_aplicados || '[]').length; } catch {}
-    try { erroresEvitados   += JSON.parse(c.errores_evitados   || '[]').length; } catch {}
+    try { const v = JSON.parse(c.patrones_aplicados || '[]'); patronesAplicados += Array.isArray(v) ? v.length : (typeof v === 'number' ? v : 0); } catch {}
+    try { const v = JSON.parse(c.errores_evitados   || '[]'); erroresEvitados   += Array.isArray(v) ? v.length : (typeof v === 'number' ? v : 0); } catch {}
   });
 
   // Review blockers
@@ -436,7 +436,7 @@ function computeTokenReductionIndex(db) {
       const rows = db.prepare("SELECT patrones_aplicados FROM ciclos WHERE patrones_aplicados IS NOT NULL LIMIT 50").all();
       if (rows.length > 0) {
         const total = rows.reduce((s, r) => {
-          try { return s + JSON.parse(r.patrones_aplicados || '[]').length; } catch { return s; }
+          try { const v = JSON.parse(r.patrones_aplicados || '[]'); return s + (Array.isArray(v) ? v.length : (typeof v === 'number' ? v : 0)); } catch { return s; }
         }, 0);
         avgPatterns = total / rows.length;
       }

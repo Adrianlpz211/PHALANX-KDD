@@ -48,24 +48,22 @@ function calcWindowMetrics(db, cycleIds) {
     db.prepare(`SELECT COUNT(*) as n FROM ciclos WHERE estado='STOP' AND ciclo_id IN (${placeholders})`).get(...cycleIds)?.n
   ) || 0;
 
+  // Columna real: errores_evitados (TEXT JSON array), no 'errores_encontrados'
   const errorsFound = safe(() => {
-    const rows = db.prepare(`SELECT errores_encontrados FROM ciclos WHERE ciclo_id IN (${placeholders})`).all(...cycleIds);
-    return rows.reduce((s, r) => s + (parseInt(r.errores_encontrados) || 0), 0);
+    const rows = db.prepare(`SELECT errores_evitados FROM ciclos WHERE ciclo_id IN (${placeholders})`).all(...cycleIds);
+    return rows.reduce((s, r) => {
+      try { const v = JSON.parse(r.errores_evitados || '[]'); return s + (Array.isArray(v) ? v.length : 0); }
+      catch { return s; }
+    }, 0);
   }) || 0;
 
-  // Tests: sumar de todos los ciclos
+  // Tests: columnas reales tests_generados / tests_pasando (enteros), no 'tests_corridos'
   let testsTotal = 0, testsPassed = 0;
   safe(() => {
-    const rows = db.prepare(`SELECT tests_corridos FROM ciclos WHERE ciclo_id IN (${placeholders})`).all(...cycleIds);
+    const rows = db.prepare(`SELECT tests_generados, tests_pasando FROM ciclos WHERE ciclo_id IN (${placeholders})`).all(...cycleIds);
     rows.forEach(r => {
-      try {
-        const t = JSON.parse(r.tests_corridos || '{}');
-        testsTotal  += (t.total  || parseInt(r.tests_corridos) || 0);
-        testsPassed += (t.passed || parseInt(r.tests_corridos) || 0);
-      } catch {
-        const n = parseInt(r.tests_corridos) || 0;
-        testsTotal += n; testsPassed += n;
-      }
+      testsTotal  += parseInt(r.tests_generados) || 0;
+      testsPassed += parseInt(r.tests_pasando) || 0;
     });
   });
 
@@ -196,7 +194,7 @@ function generateReport(projectRoot, options = {}) {
 
   // Obtener todos los ciclos en orden cronológico
   const allCycles = safe(() =>
-    db.prepare(`SELECT ciclo_id, descripcion, fecha_inicio, estado FROM ciclos ORDER BY fecha_inicio ASC`).all()
+    db.prepare(`SELECT ciclo_id, tarea AS descripcion, fecha_inicio, estado FROM ciclos ORDER BY fecha_inicio ASC`).all()
   ) || [];
 
   if (allCycles.length < 2) {

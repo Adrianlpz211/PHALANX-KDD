@@ -361,12 +361,16 @@ function waitForLock(db, moduleName, timeoutSeconds = 300) {
     const dl = detectDeadlock(db, INSTANCE_ID, moduleName);
     if (dl.deadlock) {
       db.prepare("DELETE FROM lock_waiters WHERE module_name = ? AND instance_id = ?").run(moduleName, INSTANCE_ID);
-      return { success: false, reason: 'Deadlock detected', deadlock: true, cycle: dl.deadlock_cycle };
+      return { success: false, reason: 'Deadlock detected', deadlock: true, cycle: dl.cycle };
     }
 
-    // Sleep poll
-    const start = Date.now();
-    while (Date.now() - start < WAIT_POLL_MS) { /* spin */ }
+    // Sleep poll — bloqueo real sin quemar CPU (antes era un busy-wait al 100%)
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, WAIT_POLL_MS);
+    } catch {
+      const start = Date.now();
+      while (Date.now() - start < WAIT_POLL_MS) { /* fallback spin */ }
+    }
   }
 
   db.prepare("DELETE FROM lock_waiters WHERE module_name = ? AND instance_id = ?").run(moduleName, INSTANCE_ID);

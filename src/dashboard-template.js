@@ -9,25 +9,12 @@ const { execSync } = require('child_process');
 const PORT = 3847;
 const projectPath = process.cwd();
 const dbPath = path.join(projectPath, '.agentic', 'memoria.db');
-const grafoPath = fs.existsSync(path.join(projectPath, '.agentic', 'grafo', 'grafo.cjs'))
-  ? path.join(projectPath, '.agentic', 'grafo', 'grafo.cjs')
-  : path.join(projectPath, '.agentic', 'grafo', 'grafo.js');
+const grafoPath = path.join(projectPath, '.agentic', 'grafo', 'grafo.js');
 const configPath = path.join(projectPath, '.agentic', 'config.md');
 const memoriaPath = path.join(projectPath, '.agentic', 'memoria');
 
 if (!fs.existsSync(configPath)) { console.log('\n  Agentic KDD not installed.\n'); process.exit(1); }
 if (fs.existsSync(grafoPath)) { try { process.stdout.write('  Syncing... '); execSync(`node "${grafoPath}" sync`, { stdio: 'pipe', cwd: projectPath }); console.log('✓'); } catch {} }
-
-function escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/`/g, '&#96;')
-    .replace(/\$/g, '&#36;');
-}
 
 function readConfig() {
   try {
@@ -49,67 +36,10 @@ function readConfig() {
       return result.join('\n').trim();
     };
 
-    // Leer stack — soporta múltiples formatos de config.md
+    // Leer yaml block para stack
     const getYaml = (key) => {
-      // Formato 1: yaml "  key: value"
-      let m = c.match(new RegExp('  ' + key + ': (.+)'));
-      if (m) return m[1].trim();
-      // Formato 2: markdown bold "**KEY:** value" (case insensitive)
-      m = c.match(new RegExp('\\*\\*' + key + '\\*\\*:?\\s*(.+)', 'i'));
-      if (m) return m[1].replace(/\*\*/g,'').trim();
-      // Formato 3: uppercase "KEY: value"
-      m = c.match(new RegExp('(?:^|\n)' + key.toUpperCase() + ': (.+)'));
-      if (m) return m[1].trim();
-      return '—';
-    };
-
-    // Extraer stack completo si existe como campo STACK
-    const getStack = () => {
-      const m = c.match(/(?:STACK|stack|Stack):?\s*(.+)/);
-      return m ? m[1].replace(/\*\*/g,'').trim() : null;
-    };
-    const stackFull = getStack();
-
-    // Para framework: intentar detectar de package.json si config.md no lo tiene
-    const getPkgJson = (field) => {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
-        const deps = {...(pkg.dependencies||{}), ...(pkg.devDependencies||{})};
-        if (field === 'framework') {
-          if (deps['next']) return 'Next.js ' + (deps['next']||'');
-          if (deps['express']) return 'Express';
-          if (deps['fastify']) return 'Fastify';
-          if (deps['@nestjs/core']) return 'NestJS';
-          if (deps['hono']) return 'Hono';
-        }
-        if (field === 'language') {
-          if (deps['typescript'] || deps['ts-node']) return 'TypeScript';
-          return 'JavaScript';
-        }
-        if (field === 'runtime') {
-          return 'Node.js ' + (pkg.engines?.node || '18+');
-        }
-        if (field === 'base_datos') {
-          if (deps['@prisma/client']) return 'Prisma';
-          if (deps['pg'] || deps['postgres']) return 'PostgreSQL';
-          if (deps['mysql2']) return 'MySQL';
-          if (deps['better-sqlite3']) return 'SQLite';
-        }
-        if (field === 'package_manager') {
-          if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-          if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
-          return 'npm';
-        }
-      } catch {}
-      return null;
-    };
-
-    const smartGet = (key) => {
-      const fromYaml = getYaml(key);
-      if (fromYaml && fromYaml !== '—') return fromYaml;
-      const fromPkg = getPkgJson(key);
-      if (fromPkg) return fromPkg;
-      return stackFull || '—';
+      const m = c.match(new RegExp('  ' + key + ': (.+)'));
+      return m ? m[1].trim() : '—';
     };
 
     return {
@@ -121,12 +51,11 @@ function readConfig() {
         return get('Descripción');
       })(),
       tipo: get('Tipo'),
-      framework: smartGet('framework'),
-      language: smartGet('language'),
-      runtime: smartGet('runtime'),
-      base_datos: smartGet('base_datos'),
-      package_manager: smartGet('package_manager'),
-      stack: stackFull,
+      framework: getYaml('framework'),
+      language: getYaml('language'),
+      runtime: getYaml('runtime'),
+      base_datos: getYaml('base_datos'),
+      package_manager: getYaml('package_manager'),
       cmd_dev: getYaml('dev'),
       cmd_test: getYaml('test'),
       cmd_build: getYaml('build'),
@@ -139,148 +68,6 @@ function readConfig() {
 }
 
 function readMemoria(file) { try { const p = path.join(memoriaPath, file); return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { return ''; } }
-
-function readSpecs() {
-  const specsPath = path.join(projectPath, '.agentic', 'specs');
-  if (!fs.existsSync(specsPath)) return [];
-  try {
-    return fs.readdirSync(specsPath).filter(f => f.endsWith('.md')).map(f => {
-      const c = fs.readFileSync(path.join(specsPath, f), 'utf8');
-      const estado = (c.match(/Estado: (.+)/) || [])[1]?.trim() || 'DESCONOCIDO';
-      const fecha = (c.match(/ltima actualización: (.+)/) || [])[1]?.trim() || '—';
-      const tests = (c.match(/PASS/g) || []).length;
-      return { name: f.replace('.md',''), estado, fecha, tests };
-    });
-  } catch { return []; }
-}
-
-function readLogs() {
-  const outputPath = path.join(projectPath, '_output');
-  if (!fs.existsSync(outputPath)) return [];
-  const logs = [];
-  try {
-    fs.readdirSync(outputPath).filter(f => f.startsWith('log-') && f.endsWith('.md')).forEach(f => {
-      const c = fs.readFileSync(path.join(outputPath, f), 'utf8');
-      c.split(/^## /m).filter(s => s.trim() && s.includes('Resultado:')).slice(0,20).forEach(entry => {
-        const lines = entry.split('\n');
-        const get = (k) => { for (const l of lines) { if (l.startsWith(k+':')) return l.split(':').slice(1).join(':').trim(); } return ''; };
-        logs.push({ header: lines[0].trim().slice(0,55), modulo: get('Módulo'), resultado: get('Resultado'), tests: get('Tests'), patrones: get('Patrones KDD aplicados'), errores: get('Errores evitados'), sync: get('Sync grafo') });
-      });
-    });
-  } catch {}
-  return logs.slice(0,15);
-}
-
-function calcMetrics(logs) {
-  if (ciclosDB && ciclosDB.length > 0) {
-    const total       = ciclosDB.length;
-    const completados = ciclosDB.filter(c => c.estado === 'COMPLETADO').length;
-    const stops       = ciclosDB.filter(c => c.estado === 'STOP').length;
-    const goal_attainment = Math.round(completados/total*100);
-    const autonomy_ratio  = Math.round((total-stops)/total*100);
-    const totalFases = ciclosDB.reduce((s,c) => s+(c.fases_total||0), 0);
-    const fasesOK    = ciclosDB.reduce((s,c) => s+(c.fases_completadas||0), 0);
-    const handoff    = totalFases>0 ? Math.round(fasesOK/totalFases*100) : 0;
-    let patronesTotal=0, erroresTotal=0;
-    ciclosDB.forEach(c => {
-      try { patronesTotal += JSON.parse(c.patrones_aplicados||'[]').length; } catch(e) {}
-      try { erroresTotal  += JSON.parse(c.errores_evitados||'[]').length; } catch(e) {}
-    });
-    const testsGen  = ciclosDB.reduce((s,c) => s+(c.tests_generados||0), 0);
-    const testsOK   = ciclosDB.reduce((s,c) => s+(c.tests_pasando||0), 0);
-    const test_rate = testsGen>0 ? Math.round(testsOK/testsGen*100) : 0;
-    const totalBlockers = ciclosDB.reduce((s,c) => s+(c.review_blockers||0), 0);
-    const drift_index   = (totalBlockers/total).toFixed(1);
-    const guardrails    = ciclosDB.filter(c => c.context_guard === 'STOP').length;
-
-    // Métrica 4: Tiempo promedio por ciclo (de los que tienen duracion)
-    const conDur = ciclosDB.filter(c => c.duracion_ms > 0);
-    const avg_duracion_ms = conDur.length>0
-      ? Math.round(conDur.reduce((s,c)=>s+c.duracion_ms,0)/conDur.length) : 0;
-
-    // Métrica 5: Éxito por tipo de tarea
-    const tipoMap = {};
-    ciclosDB.forEach(c => {
-      const t = c.tipo_tarea || 'feature';
-      if (!tipoMap[t]) tipoMap[t] = { total:0, ok:0 };
-      tipoMap[t].total++;
-      if (c.estado==='COMPLETADO') tipoMap[t].ok++;
-    });
-    const exito_por_tipo = Object.entries(tipoMap).map(([tipo,v]) => ({
-      tipo, total:v.total, ok:v.ok, rate: Math.round(v.ok/v.total*100)
-    }));
-
-    // Métrica 6: Evolución de memoria (snapshots antes/después)
-    let evolucion_memoria = null;
-    const conSnap = ciclosDB.filter(c => c.snapshot_fin);
-    if (conSnap.length >= 2) {
-      try {
-        const primero = JSON.parse(conSnap[conSnap.length-1].snapshot_fin);
-        const ultimo  = JSON.parse(conSnap[0].snapshot_fin);
-        evolucion_memoria = {
-          nodos_inicio: primero.totales?.total || 0,
-          nodos_ahora:  ultimo.totales?.total  || 0,
-          alta_inicio:  primero.totales?.alta  || 0,
-          alta_ahora:   ultimo.totales?.alta   || 0,
-          crecimiento:  (ultimo.totales?.total||0) - (primero.totales?.total||0),
-        };
-      } catch(e) {}
-    }
-
-    // Reintentos desde fases
-    let reintento_rate = 0, avg_fase_ms = 0;
-    if (fasesDB && fasesDB.length > 0) {
-      const conReintentos = fasesDB.filter(f => f.intentos > 1);
-      reintento_rate = Math.round(conReintentos.length/fasesDB.length*100);
-      const conFaseDur = fasesDB.filter(f => f.duracion_ms > 0);
-      avg_fase_ms = conFaseDur.length>0
-        ? Math.round(conFaseDur.reduce((s,f)=>s+f.duracion_ms,0)/conFaseDur.length) : 0;
-    }
-
-    return {
-      total, completados, stops,
-      goal_attainment, autonomy_ratio,
-      handoff_integrity: handoff,
-      drift_index, guardrail_violations: guardrails,
-      patronesTotal, erroresTotal,
-      test_rate, testsGen, testsOK,
-      avg_duracion_ms, avg_fase_ms,
-      reintento_rate, exito_por_tipo,
-      evolucion_memoria,
-      source: 'sqlite'
-    };
-  }
-  // Fallback a logs de archivos
-  const completados = logs.filter(l => l.resultado&&l.resultado.includes('COMPLETADO')).length;
-  const stops = logs.filter(l => l.resultado&&l.resultado.includes('STOP')).length;
-  let patronesTotal=0, erroresTotal=0;
-  logs.forEach(l => {
-    const pm=(l.patrones||'').match(/^(\d+)/); if(pm) patronesTotal+=parseInt(pm[1]);
-    const em=(l.errores||'').match(/^(\d+)/);  if(em) erroresTotal+=parseInt(em[1]);
-  });
-  return {
-    total:logs.length, completados, stops, patronesTotal, erroresTotal,
-    goal_attainment: logs.length>0?Math.round(completados/logs.length*100):0,
-    autonomy_ratio:0, handoff_integrity:0, drift_index:'0',
-    guardrail_violations:0, test_rate:0, testsGen:0, testsOK:0,
-    avg_duracion_ms:0, avg_fase_ms:0, reintento_rate:0,
-    exito_por_tipo:[], evolucion_memoria:null, source:'logs'
-  };
-}
-
-function calcOnboarding(config, mImpl, dec, pat, specsArr) {
-  const checks = [
-    { label: 'config.md configurado', ok: config.nombre !== '—' && config.tipo !== '—' },
-    { label: 'Primer sync del grafo', ok: fs.existsSync(dbPath) },
-    { label: 'Módulos documentados', ok: mImpl.length > 0 },
-    { label: 'Primera decisión registrada', ok: dec.length > 0 },
-    { label: 'Primer patrón registrado', ok: pat.length > 0 },
-    { label: 'Primer ciclo aa: completado', ok: readMemoria('trabajo.md').includes('COMPLETADO') },
-    { label: 'Specs generadas', ok: specsArr.length > 0 },
-  ];
-  const done = checks.filter(c => c.ok).length;
-  return { checks, done, total: checks.length, pct: Math.round(done/checks.length*100) };
-}
 
 function parseEntries(content) {
   return content.split(/^## /m)
@@ -301,117 +88,17 @@ const errores = parseEntries(readMemoria('errores.md'));
 
 function getGraphData() {
   try {
-    if (!fs.existsSync(dbPath)) return { nodes: [], edges: [], ciclos: [], fases: [] };
-    let db = null, usingSqlJs = false;
-    // Intentar better-sqlite3 primero, fallback a sql.js
-    try {
-      const BS3 = require('better-sqlite3');
-      // (Se eliminó un wrapper `db` muerto que abría una conexión nueva por query sin cerrarla.)
-      const _db = new BS3(dbPath, { readonly: true });
-      const nodes = _db.prepare('SELECT * FROM nodos ORDER BY fecha_creacion DESC').all();
-      const edges = _db.prepare('SELECT * FROM relaciones').all();
-      let ciclos = [], fases = [];
-      try { ciclos = _db.prepare('SELECT * FROM ciclos ORDER BY fecha_inicio DESC LIMIT 30').all(); } catch(e) {}
-      try { fases  = _db.prepare('SELECT * FROM fases ORDER BY fecha_inicio DESC LIMIT 100').all(); } catch(e) {}
-      _db.close();
-      return { nodes, edges, ciclos, fases };
-    } catch(e) {
-      // Fallback sql.js
-      try {
-        const SQL = require('sql.js/dist/sql-wasm.js');
-        const buffer = fs.readFileSync(dbPath);
-        const _db = new SQL.Database(buffer);
-        const allSQL = (sql) => {
-          try {
-            const stmt = _db.prepare(sql);
-            const rows = [];
-            while(stmt.step()) rows.push(stmt.getAsObject());
-            stmt.free();
-            return rows;
-          } catch(e) { return []; }
-        };
-        const nodes  = allSQL('SELECT * FROM nodos ORDER BY fecha_creacion DESC');
-        const edges  = allSQL('SELECT * FROM relaciones');
-        const ciclos = allSQL('SELECT * FROM ciclos ORDER BY fecha_inicio DESC LIMIT 30');
-        const fases  = allSQL('SELECT * FROM fases ORDER BY fecha_inicio DESC LIMIT 100');
-        return { nodes, edges, ciclos, fases };
-      } catch(e2) {
-        return { nodes: [], edges: [], ciclos: [], fases: [] };
-      }
-    }
-  } catch { return { nodes: [], edges: [], ciclos: [], fases: [] }; }
+    if (!fs.existsSync(dbPath)) return { nodes: [], edges: [] };
+    const Database = require('better-sqlite3');
+    const db = new Database(dbPath, { readonly: true });
+    const nodes = db.prepare('SELECT * FROM nodos ORDER BY fecha_creacion DESC').all();
+    const edges = db.prepare('SELECT * FROM relaciones').all();
+    db.close();
+    return { nodes, edges };
+  } catch { return { nodes: [], edges: [] }; }
 }
 
-
-// ─── v3.3: CONTRACT GUARD DATA ────────────────────────────────────────────────
-function getContractData() {
-  const empty = { total:0, protected:0, verified:0, candidate:0, violations:0, recent:[] };
-  if (!fs.existsSync(dbPath)) return empty;
-  let _db;
-  try {
-    const BS3 = require('better-sqlite3');
-    _db = new BS3(dbPath, { readonly: true });
-    const safe = (fn) => { try { return fn(); } catch { return null; } };
-    return {
-      total:     safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts").get()?.n) || 0,
-      protected: safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='protected'").get()?.n) || 0,
-      verified:  safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='verified'").get()?.n) || 0,
-      candidate: safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='candidate'").get()?.n) || 0,
-      violations:safe(() => _db.prepare("SELECT COUNT(*) as n FROM contract_violations WHERE recovered=0").get()?.n) || 0,
-      recent:    safe(() => _db.prepare("SELECT id, module, name, status, verification_count, failure_count FROM verified_contracts ORDER BY updated_at DESC LIMIT 8").all()) || [],
-    };
-  } catch { return empty; } finally { try { _db && _db.close(); } catch {} }
-}
-
-function getCreativeData() {
-  const empty = { level:1, suggestions:0, wins:0, auto_applicable:0, recent_suggestions:[], protected_for_level2:0 };
-  if (!fs.existsSync(dbPath)) return empty;
-  let _db;
-  try {
-    const BS3 = require('better-sqlite3');
-    _db = new BS3(dbPath, { readonly: true });
-    const safe = (fn) => { try { return fn(); } catch { return null; } };
-    const protCount = safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status IN ('protected','verified')").get()?.n) || 0;
-    return {
-      level:              protCount >= 10 ? 2 : 1,
-      protected_for_level2: protCount,
-      suggestions:        safe(() => _db.prepare("SELECT COUNT(*) as n FROM creative_suggestions WHERE applied=0 AND dismissed=0").get()?.n) || 0,
-      wins:               safe(() => _db.prepare("SELECT COUNT(*) as n FROM creative_wins").get()?.n) || 0,
-      auto_applicable:    safe(() => _db.prepare("SELECT COUNT(*) as n FROM creative_suggestions WHERE auto_applicable=1 AND applied=0 AND dismissed=0").get()?.n) || 0,
-      recent_suggestions: safe(() => _db.prepare("SELECT id, type, title, risk_level, module, auto_applicable FROM creative_suggestions WHERE applied=0 AND dismissed=0 ORDER BY created_at DESC LIMIT 5").all()) || [],
-    };
-  } catch { return empty; } finally { try { _db && _db.close(); } catch {} }
-}
-
-function getCuratorData() {
-  try {
-    const logPath = path.join(projectPath, '.agentic', 'curator.log');
-    let lastRun = 'nunca';
-    if (fs.existsSync(logPath)) {
-      const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean);
-      if (lines.length > 0) {
-        const match = lines[lines.length-1].match(/\[([^\]]+)\]/);
-        if (match) lastRun = match[1].split('T')[0];
-      }
-    }
-    return { lastRun };
-  } catch { return { lastRun: 'nunca' }; }
-}
-
-
-// ─── v3.3: EFFECTIVENESS REPORT DATA ─────────────────────────────────────────
-function getEffectivenessData() {
-  const empty = { total_cycles:0, metrics:{}, summary:{ improving:[], needs_work:[], stable:[] } };
-  if (!fs.existsSync(dbPath)) return empty;
-  try {
-    const { generateReport } = require(path.join(__dirname, '.agentic/grafo/effectiveness-report.cjs'));
-    const r = generateReport(__dirname);
-    return r.error ? empty : r;
-  } catch { return empty; }
-}
-
-
-const { nodes, edges, ciclos: ciclosDB, fases: fasesDB } = getGraphData();
+const { nodes, edges } = getGraphData();
 
 // Calcular grado de conexiones por nodo (como Graphify — nodos divinos)
 const degreeMap = {};
@@ -461,15 +148,7 @@ function parseModulos(text) {
   return results;
 }
 
-const contractData   = getContractData();
-const effectData     = getEffectivenessData();
-const creativeData   = getCreativeData();
-const curatorData    = getCuratorData();
 const modulosImpl = parseModulos(config.implementados);
-const specsData = readSpecs();
-const logsData = readLogs();
-const metricsData = calcMetrics(logsData);
-const onboardingData = calcOnboarding(config, modulosImpl, decisiones, patrones, specsData);
 const modulosPend = parseModulos(config.pendientes);
 const reglas = (config.reglas || '').split('\n').map(l => l.trim()).filter(l => l && l !== '—' && l.length > 5);
 
@@ -491,7 +170,7 @@ function buildModuleGraph() {
   // Crear nodos de módulos implementados
   modulosImpl.forEach((m, i) => {
     const area = m.toLowerCase().replace(/\s+/g, '-').split(/[\s\/\-]/)[0];
-    const stats = areaCount[area] || { errors: 0, patterns: 0, decisions: 0, high: 0 };
+    const stats = areaCount[area] || areaCount['global'] || { errors: 0, patterns: 0, decisions: 0, high: 0 };
     mNodes.push({ id: 'impl-' + i, label: m, tipo: 'impl', area, errors: stats.errors, patterns: stats.patterns, high: stats.high, degree: stats.errors + stats.patterns + stats.decisions });
   });
 
@@ -572,7 +251,7 @@ const HTML = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Agentic KDD — ${escHtml(config.nombre)}</title>
+<title>Agentic KDD — ${config.nombre}</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
 :root{--bg:#0a0d14;--bg2:#111520;--bg3:#1a1f2e;--bg4:#232840;--border:#2a3050;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--purple:#8b5cf6;--pl:#a78bfa;--green:#10b981;--red:#ef4444;--blue:#3b82f6;--amber:#f59e0b;--cyan:#06b6d4;--pink:#ec4899;--r:12px}
@@ -667,12 +346,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .graph-legend{position:absolute;top:10px;left:10px;background:rgba(17,21,32,.9);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;gap:10px;backdrop-filter:blur(4px)}
 .lg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text2)}
 .lg-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.graph-controls{position:absolute;bottom:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:480px}
-.gc-slider-wrap{display:flex;align-items:center;gap:4px;background:rgba(17,21,32,.9);border:1px solid var(--border);border-radius:6px;padding:3px 8px}
-.gc-slider-label{font-size:13px;color:var(--text2)}
-.gc-slider{-webkit-appearance:none;width:80px;height:3px;border-radius:2px;background:var(--border);outline:none;cursor:pointer}
-.gc-slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:#8b5cf6;cursor:pointer}
-.node-pinned{stroke:#ffffff !important;stroke-width:2px !important;stroke-dasharray:3,2}
+.graph-controls{position:absolute;bottom:12px;left:12px;display:flex;gap:6px}
 .gc-btn{background:rgba(17,21,32,.9);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 9px;font-size:10px;cursor:pointer;backdrop-filter:blur(4px)}
 .gc-btn:hover{border-color:var(--purple);color:var(--pl)}
 
@@ -697,7 +371,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 /* ════════ PROJECT DOCS MODE ════════ */
 #mode-docs{flex:1;display:none;overflow:hidden}
-.docs-layout{display:flex;height:100%;width:100%;overflow:hidden;flex:1;min-width:0}
+.docs-layout{display:flex;height:100%;overflow:hidden}
 .docs-nav{width:210px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);overflow-y:auto;padding:12px}
 .docs-nav::-webkit-scrollbar{width:3px}
 .docs-nav::-webkit-scrollbar-thumb{background:var(--border)}
@@ -707,7 +381,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .nav-item:hover{background:var(--bg3);color:var(--text)}
 .nav-item.active{background:rgba(139,92,246,.12);color:var(--pl);border-left:2px solid var(--purple);padding-left:6px}
 .nav-count{font-size:10px;color:var(--text3);margin-left:auto;background:var(--bg3);border-radius:10px;padding:1px 5px}
-.docs-main{flex:1;min-width:0;overflow-y:auto;padding:24px 28px}
+.docs-main{flex:1;overflow-y:auto;padding:24px 28px}
 .docs-main::-webkit-scrollbar{width:4px}
 .docs-main::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .docs-section{display:none}.docs-section.active{display:block}#doc-modules.active{display:flex}
@@ -810,7 +484,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="mode-tabs">
   <div class="mode-tab active" onclick="setMode('graph',this)">🧠 <span data-i="tab_graph">Knowledge Graph</span></div>
   <div class="mode-tab" onclick="setMode('docs',this)">📚 <span data-i="tab_docs">Project Docs</span></div>
-  <div class="mode-tab" onclick="setMode('intel',this)">🛡️ Preservation Intel</div>
 </div>
 
 <div class="content">
@@ -913,13 +586,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <button class="gc-btn" onclick="resetGraph()" data-i="btn_reset">⟳ Reset</button>
       <button class="gc-btn" onclick="centerGraph()" data-i="btn_center">⊙ Center</button>
       <button class="gc-btn" onclick="toggleLabels()" id="label-btn" data-i="btn_labels">Labels OFF</button>
-      <button class="gc-btn" onclick="spreadGraph()" title="Spread nodes apart">⊹ Spread</button>
-      <button class="gc-btn" onclick="releaseAll()" title="Release all pinned nodes">⊠ Unpin all</button>
-      <div class="gc-slider-wrap" title="Node repulsion">
-        <span class="gc-slider-label">⊷</span>
-        <input type="range" class="gc-slider" id="repulsion-slider" min="50" max="800" value="320"
-          oninput="setRepulsion(this.value)" title="Repulsion force">
-      </div>
     </div>
     <div class="detail-panel" id="detail-panel">
       <div class="dp-header">
@@ -953,9 +619,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="nav-item" onclick="showDoc('decisions',this)">🔵 <span data-i="nav_decisions">Decisions</span> <span class="nav-count">${decisiones.length}</span></div>
         <div class="nav-item" onclick="showDoc('errors',this)">🔴 <span data-i="nav_errors">Errors</span> <span class="nav-count">${errores.length}</span></div>
         <div class="nav-item" onclick="showDoc('questions',this)">💡 <span data-i="nav_questions">For New Devs</span></div>
-        <div class="nav-item" onclick="showDoc('metrics',this)">📊 <span>Metrics</span></div>
-        <div class="nav-item" onclick="showDoc('timeline',this)">🕐 <span>Timeline</span></div>
-        <div class="nav-item" onclick="showDoc('onboarding',this)">🚀 <span>Onboarding</span> <span class="nav-count">${onboardingData.pct}%</span></div>
       </div>
     </nav>
 
@@ -995,12 +658,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="docs-h1" data-i="h_stack">Tech Stack</div>
         <div class="docs-sub" data-i="sub_stack">Technologies and frameworks used in this project.</div>
         <div class="stack-grid">
-          <div class="stack-item"><div class="si-label">Framework</div><div class="si-val">${config.framework && config.framework !== '—' ? config.framework : (config.stack || '—')}</div></div>
-          <div class="stack-item"><div class="si-label">Language</div><div class="si-val">${config.language && config.language !== '—' ? config.language : '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Runtime</div><div class="si-val">${config.runtime && config.runtime !== '—' ? config.runtime : '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Database</div><div class="si-val">${config.base_datos && config.base_datos !== '—' ? config.base_datos : '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Package Manager</div><div class="si-val">${config.package_manager && config.package_manager !== '—' ? config.package_manager : '—'}</div></div>
-          ${config.stack ? '<div class="stack-item" style="grid-column:1/-1"><div class="si-label">Full Stack</div><div class="si-val">' + escHtml(config.stack) + '</div></div>' : ''}
+          <div class="stack-item"><div class="si-label">Framework</div><div class="si-val">${config.framework || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Language</div><div class="si-val">${config.language || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Runtime</div><div class="si-val">${config.runtime || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Database</div><div class="si-val">${config.base_datos || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Package Manager</div><div class="si-val">${config.package_manager || '—'}</div></div>
         </div>
         <div class="docs-h2">Commands</div>
         <div class="cmd-row"><div class="cmd-label">dev</div><div class="cmd-val">${config.cmd_dev || '—'}</div></div>
@@ -1080,13 +742,13 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div class="docs-section" id="doc-patterns">
         <div class="docs-h1">Patterns</div>
         <div class="docs-sub">Rules the system learned from this project. HIGH = permanent rule applied automatically.</div>
-        ${patrones.length ? patrones.filter(p => p.titulo && p.titulo !== 'Nombre del patrón' && p.titulo.length > 5).sort((a,b) => {const w={ALTA:3,MEDIA:2,BAJA:1}; return (w[b.confianza]||0)-(w[a.confianza]||0);}).map(p => {
+        ${patrones.length ? patrones.sort((a,b) => {const w={ALTA:3,MEDIA:2,BAJA:1}; return (w[b.confianza]||0)-(w[a.confianza]||0);}).map(p => {
           const maxUse = Math.max(...patrones.map(x => x.aplicado), 1);
           return `<div class="pattern-card ${p.confianza==='ALTA'?'high':''}">
             <div class="pc-top">
-              <div class="pc-title">${escHtml(p.titulo)}</div>
-              <span class="mb c${p.confianza}">${escHtml(p.confianza)}</span>
-              <span class="ab">${escHtml(p.area)}</span>
+              <div class="pc-title">${p.titulo}</div>
+              <span class="mb c${p.confianza}">${p.confianza}</span>
+              <span class="ab">${p.area}</span>
             </div>
             ${p.aplicado > 0 ? `<div style="font-size:10px;color:var(--text3);margin-bottom:4px">Applied ${p.aplicado} times · ${p.util} useful</div><div class="usage-bar"><div class="usage-fill" style="width:${Math.round(p.aplicado/maxUse*100)}%"></div></div>` : ''}
           </div>`;
@@ -1104,8 +766,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <div class="docs-section" id="doc-errors">
         <div class="docs-h1">Known Error Patterns</div>
         <div class="docs-sub">Errors the system has already learned to avoid automatically.</div>
-        ${errores.length ? errores.filter(e => e.titulo && e.titulo !== 'Nombre del patrón' && e.titulo.length > 5).sort((a,b)=>b.aplicado-a.aplicado).map(e => `<div class="pattern-card" style="border-left:3px solid var(--red)">
-          <div class="pc-top"><div class="pc-title">${escHtml(e.titulo)}</div><span class="mb c${e.confianza}">${e.confianza}</span><span class="ab">${escHtml(e.area)}</span></div>
+        ${errores.length ? errores.sort((a,b)=>b.aplicado-a.aplicado).map(e => `<div class="pattern-card" style="border-left:3px solid var(--red)">
+          <div class="pc-top"><div class="pc-title">${e.titulo}</div><span class="mb c${e.confianza}">${e.confianza}</span><span class="ab">${e.area}</span></div>
           ${e.aplicado > 0 ? `<div style="font-size:10px;color:var(--text3)">Resolved ${e.aplicado} times</div>` : ''}
         </div>`).join('') : '<div class="empty-state">No errors recorded yet</div>'}
       </div>
@@ -1131,324 +793,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         </div>` : ''}
       </div>
 
-      <!-- METRICS -->
-      <div class="docs-section" id="doc-metrics">
-        <div class="docs-h1">📊 Metrics</div>
-        <div class="docs-sub">Real observability — every aa: cycle tracked. Data from SQLite, not estimates.</div>
-        ${metricsData.total === 0 ? `<div class="empty-state" style="padding:48px;text-align:center">
-          <div style="font-size:36px;margin-bottom:12px">📊</div>
-          <div style="font-size:14px;color:var(--text2);margin-bottom:6px">No cycles recorded yet</div>
-          <div style="font-size:12px;color:var(--text3)">Run <code style="background:var(--bg3);padding:2px 6px;border-radius:3px">aa: [task]</code> to start — metrics appear automatically after each cycle</div>
-        </div>` : `
-        <!-- Fila 1: 4 KPIs principales -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
-          <div style="background:linear-gradient(135deg,rgba(139,92,246,.08),rgba(16,185,129,.04));border:1px solid rgba(139,92,246,.2);border-radius:10px;padding:14px;text-align:center">
-            <div style="font-size:28px;font-weight:700;color:${metricsData.goal_attainment>=80?'#34d399':metricsData.goal_attainment>=60?'#fbbf24':'#f87171'}">${metricsData.goal_attainment}%</div>
-            <div style="font-size:10px;font-weight:600;color:var(--text2);margin-top:3px">Goal Attainment</div>
-            <div style="font-size:9px;color:${metricsData.goal_attainment>=80?'#34d399':'var(--text3)'}">target >80%</div>
-          </div>
-          <div style="background:rgba(6,182,212,.05);border:1px solid rgba(6,182,212,.2);border-radius:10px;padding:14px;text-align:center">
-            <div style="font-size:28px;font-weight:700;color:var(--cyan)">${metricsData.autonomy_ratio||0}%</div>
-            <div style="font-size:10px;font-weight:600;color:var(--text2);margin-top:3px">Autonomy Ratio</div>
-            <div style="font-size:9px;color:var(--text3)">cycles without STOP</div>
-          </div>
-          <div style="background:rgba(16,185,129,.04);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:14px;text-align:center">
-            <div style="font-size:28px;font-weight:700;color:${(metricsData.handoff_integrity||0)>=90?'#34d399':'#fbbf24'}">${metricsData.handoff_integrity||0}%</div>
-            <div style="font-size:10px;font-weight:600;color:var(--text2);margin-top:3px">Handoff Integrity</div>
-            <div style="font-size:9px;color:${(metricsData.handoff_integrity||0)>=90?'#34d399':'var(--text3)'}">target >90%</div>
-          </div>
-          <div style="background:rgba(239,68,68,.04);border:1px solid rgba(239,68,68,.15);border-radius:10px;padding:14px;text-align:center">
-            <div style="font-size:28px;font-weight:700;color:${parseFloat(metricsData.drift_index||0)<=0.5?'#34d399':'#f87171'}">${metricsData.drift_index||'0'}</div>
-            <div style="font-size:10px;font-weight:600;color:var(--text2);margin-top:3px">Drift Index</div>
-            <div style="font-size:9px;color:${parseFloat(metricsData.drift_index||0)<=0.5?'#34d399':'var(--text3)'}">blockers/cycle (0=ideal)</div>
-          </div>
-        </div>
-
-        <!-- Fila 2: 6 stats secundarios -->
-        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px">
-          <div class="info-card"><div class="ic-label">Cycles</div><div class="ic-val" style="color:var(--pl)">${metricsData.total}</div></div>
-          <div class="info-card"><div class="ic-label">Completed</div><div class="ic-val" style="color:var(--green)">${metricsData.completados}</div></div>
-          <div class="info-card"><div class="ic-label">STOPs</div><div class="ic-val" style="color:var(--red)">${metricsData.stops}</div></div>
-          <div class="info-card"><div class="ic-label">Patterns used</div><div class="ic-val" style="color:var(--amber)">${metricsData.patronesTotal}</div></div>
-          <div class="info-card"><div class="ic-label">Errors avoided</div><div class="ic-val" style="color:var(--cyan)">${metricsData.erroresTotal}</div></div>
-          <div class="info-card"><div class="ic-label">Test pass rate</div><div class="ic-val" style="color:var(--green)">${metricsData.test_rate||0}%</div></div>
-        </div>
-
-        <!-- Métrica extra: tiempo por ciclo y reintentos -->
-        ${metricsData.avg_duracion_ms > 0 || metricsData.reintento_rate > 0 ? `
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
-          ${metricsData.avg_duracion_ms>0?`<div class="info-card"><div class="ic-label">Avg cycle time</div><div class="ic-val" style="color:var(--text2);font-size:13px">${metricsData.avg_duracion_ms>60000?Math.round(metricsData.avg_duracion_ms/60000)+'m':metricsData.avg_duracion_ms+'ms'}</div></div>`:''}
-          ${metricsData.avg_fase_ms>0?`<div class="info-card"><div class="ic-label">Avg phase time</div><div class="ic-val" style="color:var(--text2);font-size:13px">${metricsData.avg_fase_ms>60000?Math.round(metricsData.avg_fase_ms/60000)+'m':metricsData.avg_fase_ms+'ms'}</div></div>`:''}
-          ${metricsData.reintento_rate>0?`<div class="info-card"><div class="ic-label">Retry rate</div><div class="ic-val" style="color:${metricsData.reintento_rate>30?'#f87171':'#fbbf24'};font-size:16px">${metricsData.reintento_rate}%</div></div>`:''}
-        </div>` : ''}
-
-        <!-- Guardrail violations -->
-        ${metricsData.guardrail_violations > 0
-          ? `<div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#f87171">⚠️ Guardrail violations: ${metricsData.guardrail_violations} — instructions outside project scope</div>`
-          : `<div style="background:rgba(16,185,129,.04);border:1px solid rgba(16,185,129,.15);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#34d399">✓ Guardrail violations: 0 — all instructions within project scope</div>`}
-
-        <!-- Éxito por tipo de tarea -->
-        ${metricsData.exito_por_tipo && metricsData.exito_por_tipo.length > 1 ? `
-        <div class="docs-h2">Success rate by task type</div>
-        <div style="display:grid;grid-template-columns:repeat(${Math.min(metricsData.exito_por_tipo.length,4)},1fr);gap:8px;margin-bottom:16px">
-          ${metricsData.exito_por_tipo.map(t => `
-          <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-size:18px;font-weight:700;color:${t.rate>=80?'#34d399':t.rate>=60?'#fbbf24':'#f87171'}">${t.rate}%</div>
-            <div style="font-size:10px;color:var(--text2);margin-top:2px">${t.tipo}</div>
-            <div style="font-size:9px;color:var(--text3)">${t.ok}/${t.total}</div>
-          </div>`).join('')}
-        </div>` : ''}
-
-        <!-- Evolución de memoria -->
-        ${metricsData.evolucion_memoria ? `
-        <div class="docs-h2">Memory evolution</div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
-            <div><div style="font-size:18px;font-weight:600;color:var(--pl)">${metricsData.evolucion_memoria.nodos_inicio}</div><div style="font-size:10px;color:var(--text3)">nodes at start</div></div>
-            <div><div style="font-size:18px;font-weight:600;color:var(--pl)">${metricsData.evolucion_memoria.nodos_ahora}</div><div style="font-size:10px;color:var(--text3)">nodes now</div></div>
-            <div><div style="font-size:18px;font-weight:600;color:${metricsData.evolucion_memoria.crecimiento>0?'#34d399':'#94a3b8'}">+${metricsData.evolucion_memoria.crecimiento}</div><div style="font-size:10px;color:var(--text3)">growth</div></div>
-            <div><div style="font-size:18px;font-weight:600;color:var(--amber)">${metricsData.evolucion_memoria.alta_ahora}</div><div style="font-size:10px;color:var(--text3)">HIGH rules now</div></div>
-          </div>
-        </div>` : ''}
-
-        <!-- Ciclos recientes -->
-        <div class="docs-h2">Recent cycles</div>
-        ${(ciclosDB&&ciclosDB.length>0?ciclosDB:logsData).map(l => {
-          const esDB = !!l.ciclo_id;
-          const tarea = (esDB ? l.tarea : l.header)||'';
-          const modulo = l.modulo;
-          const ok = esDB ? l.estado==='COMPLETADO' : (l.resultado&&l.resultado.includes('COMPLETADO'));
-          const fases = esDB && l.fases_total>0 ? l.fases_completadas+'/'+l.fases_total+' phases' : '';
-          const tests = esDB ? (l.tests_pasando||0)+'/'+(l.tests_generados||0)+' tests' : (l.tests||'');
-          const tipo  = esDB && l.tipo_tarea ? l.tipo_tarea : '';
-          let pats=0; if(esDB){try{pats=JSON.parse(l.patrones_aplicados||'[]').length;}catch(e){}}
-          return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${ok?'var(--green)':'var(--red)'};border-radius:8px;padding:10px 14px;margin-bottom:6px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
-              <div style="font-size:12px;font-weight:500;color:var(--text);flex:1;margin-right:8px">${tarea.slice(0,65)}</div>
-              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                ${tipo?`<span style="font-size:9px;background:rgba(139,92,246,.15);color:#a78bfa;border-radius:3px;padding:1px 5px">${tipo}</span>`:''}
-                <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:${ok?'rgba(16,185,129,.15)':'rgba(239,68,68,.15)'};color:${ok?'#34d399':'#f87171'}">${ok?'done':'stop'}</span>
-              </div>
-            </div>
-            <div style="display:flex;gap:10px;font-size:10px;color:var(--text3);flex-wrap:wrap">
-              ${modulo&&modulo!=='global'?`<span>📦 ${modulo}</span>`:''}
-              ${fases?`<span>${fases}</span>`:''}
-              ${tests&&tests!=='0/0'?`<span style="color:#34d399">🧪 ${tests}</span>`:''}
-              ${pats>0?`<span style="color:var(--amber)">★ ${pats} patterns</span>`:''}
-              <span style="margin-left:auto">${(l.fecha_inicio||'').slice(0,16)}</span>
-            </div>
-          </div>`;
-        }).join('')}
-        `}
-      </div>
-
-      <!-- TIMELINE -->
-      <div class="docs-section" id="doc-timeline">
-        <div class="docs-h1">🕐 Decision Timeline</div>
-        <div class="docs-sub">Every architectural decision, when it was made, why, and which modules it affects. The project's living memory.</div>
-        ${decisiones.length === 0 ? '<div class="empty-state" style="padding:40px">No decisions recorded yet — the system logs them automatically as you build</div>' : `
-        <div style="position:relative;padding-left:24px">
-          <div style="position:absolute;left:8px;top:0;bottom:0;width:2px;background:var(--border)"></div>
-          ${decisiones.map((d,i) => `<div style="position:relative;margin-bottom:16px">
-            <div style="position:absolute;left:-20px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--blue);border:2px solid var(--bg)"></div>
-            <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:8px;padding:12px 14px">
-              <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px">${d.titulo}</div>
-              <div style="display:flex;gap:8px;margin-bottom:6px">
-                <span style="font-size:10px;background:rgba(59,130,246,.15);color:#60a5fa;border-radius:3px;padding:1px 6px">${d.area}</span>
-                <span style="font-size:10px;color:var(--text3)">${d.confianza}</span>
-              </div>
-              ${d.contenido && d.contenido.split('\n').find(l=>l.startsWith('Razón:')) ? `<div style="font-size:11px;color:var(--text2);line-height:1.5">${d.contenido.split('\n').find(l=>l.startsWith('Razón:')).replace('Razón:','').trim()}</div>` : ''}
-            </div>
-          </div>`).join('')}
-        </div>`}
-        ${specsData.length > 0 ? `
-        <div class="docs-h2" style="margin-top:24px">📋 Module Specs</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Auto-generated specs — updated after every aa: cycle</div>
-        ${specsData.map(s => `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${s.estado.includes('IMPLEMENTADO')?'var(--green)':'var(--amber)'};border-radius:8px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
-          <div style="font-size:13px;font-weight:500;color:var(--text);flex:1">${s.name}</div>
-          <span style="font-size:10px;background:${s.estado.includes('IMPLEMENTADO')?'rgba(16,185,129,.15)':'rgba(245,158,11,.15)'};color:${s.estado.includes('IMPLEMENTADO')?'#34d399':'#fbbf24'};border-radius:4px;padding:2px 7px">${s.estado}</span>
-          ${s.tests>0?`<span style="font-size:10px;color:var(--text3)">${s.tests} tests</span>`:''}
-          <span style="font-size:10px;color:var(--text3)">${s.fecha}</span>
-        </div>`).join('')}` : ''}
-      </div>
-
-      <!-- ONBOARDING -->
-      <div class="docs-section" id="doc-onboarding">
-        <div class="docs-h1">🚀 Project Setup</div>
-        <div class="docs-sub">How configured is this project with Agentic KDD. Complete all steps for the full system to work.</div>
-        
-        <!-- Progress bar -->
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div style="font-size:14px;font-weight:600;color:var(--text)">Setup progress</div>
-            <div style="font-size:24px;font-weight:700;color:${onboardingData.pct===100?'var(--green)':onboardingData.pct>50?'var(--amber)':'var(--red)'}">${onboardingData.pct}%</div>
-          </div>
-          <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin-bottom:16px">
-            <div style="height:100%;width:${onboardingData.pct}%;background:${onboardingData.pct===100?'var(--green)':onboardingData.pct>50?'var(--amber)':'var(--purple)'};border-radius:4px;transition:width .5s"></div>
-          </div>
-          ${onboardingData.checks.map(c => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">
-            <span style="font-size:16px">${c.ok?'✅':'⬜'}</span>
-            <span style="font-size:12px;color:${c.ok?'var(--text)':'var(--text3)'}">${c.label}</span>
-            ${!c.ok?'<span style="font-size:10px;color:var(--amber);margin-left:auto">pending</span>':'<span style="font-size:10px;color:var(--green);margin-left:auto">done</span>'}
-          </div>`).join('')}
-        </div>
-
-        ${onboardingData.pct < 100 ? `
-        <div class="docs-h2">Next steps</div>
-        ${onboardingData.checks.filter(c=>!c.ok).map(c => {
-          const steps = {
-            'config.md configurado': 'Open in Cursor/Claude Code and run: aa: configurar',
-            'Primer sync del grafo': 'Run: node .agentic/grafo/grafo.cjs sync',
-            'Módulos documentados': 'Run: aa: configurar — describe your modules',
-            'Primera decisión registrada': 'Run any aa: task — decisions are logged automatically',
-            'Primer patrón registrado': 'Run any aa: task — patterns are detected automatically',
-            'Primer ciclo aa: completado': 'Run: aa: [any task]',
-            'Specs generadas': 'Complete a full module with aa: — specs auto-generate',
-          };
-          return `<div style="background:var(--bg2);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start">
-            <span style="font-size:18px;flex-shrink:0">⏳</span>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:4px">${c.label}</div>
-              <div style="font-size:11px;color:var(--text2)">${steps[c.label]||'Follow the setup instructions'}</div>
-            </div>
-          </div>`;
-        }).join('')}` : `
-        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:12px;padding:20px;text-align:center">
-          <div style="font-size:32px;margin-bottom:8px">🎉</div>
-          <div style="font-size:16px;font-weight:700;color:#34d399;margin-bottom:6px">Fully configured</div>
-          <div style="font-size:12px;color:var(--text2)">This project has Agentic KDD fully set up. The system will keep improving automatically.</div>
-        </div>`}
-      </div>
-
     </div>
   </div>
 </div>
-
-</div>
-
-<!-- ════════ PRESERVATION INTEL ════════ -->
-<style>
-  #mode-intel { background: var(--bg); }
-  .il-title { font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin:0 0 12px }
-  .il-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:20px }
-  .il-card { background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px }
-  .il-card-head { display:flex;align-items:center;gap:9px;margin-bottom:12px }
-  .il-card-icon { width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0 }
-  .icon-p { background:rgba(127,119,221,.15) }
-  .icon-g { background:rgba(29,158,117,.15) }
-  .icon-a { background:rgba(239,159,39,.15) }
-  .il-card-name { font-size:13px;font-weight:700;color:var(--text) }
-  .il-card-sub  { font-size:11px;color:var(--text3);margin-top:1px }
-  .il-stat-row { display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px }
-  .il-stat { background:rgba(255,255,255,.03);border-radius:7px;padding:9px;text-align:center }
-  .il-stat-val { font-size:20px;font-weight:800;line-height:1.1 }
-  .il-stat-lbl { font-size:10px;color:var(--text3);margin-top:2px }
-  .vp { color:#9f99e8 } .vg { color:#34d399 } .va { color:#fbbf24 } .vr { color:#f87171 } .vx { color:var(--text2) }
-  .il-list { display:flex;flex-direction:column;gap:5px }
-  .il-row { display:flex;align-items:center;gap:7px;padding:6px 9px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px }
-  .il-badge { font-size:9px;font-weight:700;padding:2px 6px;border-radius:9px;white-space:nowrap;flex-shrink:0 }
-  .bp { background:rgba(127,119,221,.2);color:#9f99e8 }
-  .bv { background:rgba(29,158,117,.2);color:#34d399 }
-  .bc { background:rgba(239,159,39,.2);color:#fbbf24 }
-  .bi { background:rgba(248,113,113,.2);color:#f87171 }
-  .il-row-name { flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-  .il-row-mod  { font-size:10px;color:var(--text3) }
-  .sug-row { display:flex;align-items:flex-start;gap:7px;padding:6px 9px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px;margin-bottom:4px }
-  .sug-type { font-size:9px;font-weight:700;padding:2px 6px;border-radius:9px;background:rgba(239,159,39,.15);color:#fbbf24;white-space:nowrap;flex-shrink:0 }
-  .sug-auto { background:rgba(29,158,117,.15);color:#34d399 }
-  .sug-txt  { color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-  .lvl-bar { display:flex;align-items:center;gap:8px;margin-bottom:10px }
-  .lvl-track { height:5px;flex:1;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden }
-  .lvl-fill  { height:100%;border-radius:3px }
-  .cur-row { display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px }
-  .cur-row:last-child { border-bottom:none }
-  .cur-k { color:var(--text3) } .cur-v { color:var(--text2);font-weight:600 }
-  .empty-state { font-size:12px;color:var(--text3);text-align:center;padding:12px 0 }
-  .obs-panel { background:var(--surface);border:1px solid #3730a3;border-radius:12px;padding:14px 18px;margin-bottom:20px }
-  .obs-head  { display:flex;align-items:center;gap:9px;margin-bottom:9px }
-  .obs-badge { font-size:10px;padding:2px 7px;border-radius:9px;background:rgba(99,91,255,.15);color:#818cf8;font-weight:600 }
-  .obs-txt   { font-size:13px;color:var(--text2);line-height:1.5 }
-  .obs-cmd   { font-family:monospace;font-size:11px;background:rgba(255,255,255,.05);color:#a5b4fc;padding:6px 10px;border-radius:6px;margin-top:8px;display:block }
-  /* fix intel layout */
-  #mode-intel { display:none;flex:1;overflow-y:auto;padding:24px;flex-direction:column;gap:0;align-items:stretch;justify-content:flex-start;box-sizing:border-box; }
-</style>
-<div id="mode-intel" style="display:none;width:100%;height:100%;overflow-y:auto;background:var(--bg);flex-direction:column;align-items:stretch;justify-content:flex-start;padding:24px;box-sizing:border-box;gap:0">
-
-
-
-  <p class="il-title">Contract Guard</p>
-  <div class="il-grid">
-    <div class="il-card">
-      <div class="il-card-head">
-        <div class="il-card-icon icon-p">🛡️</div>
-        <div><div class="il-card-name">Contratos verificados</div><div class="il-card-sub">Lo que no se puede romper</div></div>
-      </div>
-      <div class="il-stat-row">
-        <div class="il-stat"><div class="il-stat-val vp">${contractData.protected}</div><div class="il-stat-lbl">Protected</div></div>
-        <div class="il-stat"><div class="il-stat-val vg">${contractData.verified}</div><div class="il-stat-lbl">Verified</div></div>
-        <div class="il-stat"><div class="il-stat-val va">${contractData.candidate}</div><div class="il-stat-lbl">Candidate</div></div>
-        <div class="il-stat"><div class="il-stat-val ${contractData.violations > 0 ? 'vr' : 'vx'}">${contractData.violations}</div><div class="il-stat-lbl">Violations</div></div>
-      </div>
-      ${contractData.recent && contractData.recent.length > 0 ? `
-      <div class="il-list">
-        ${contractData.recent.map(c => `
-          <div class="il-row">
-            <span class="il-badge b${c.status[0]}">${c.status.toUpperCase()}</span>
-            <span class="il-row-name" title="${escHtml(c.name)}">${escHtml(c.name.substring(0,38))}</span>
-            <span class="il-row-mod">${escHtml(c.module)}</span>
-          </div>`).join('')}
-      </div>` : `<div class="empty-state">Sin contratos — corre ciclos aa: para generarlos</div>`}
-    </div>
-
-    <div class="il-card">
-      <div class="il-card-head">
-        <div class="il-card-icon icon-a">✨</div>
-        <div><div class="il-card-name">Creative Engine</div><div class="il-card-sub">Autonomía creativa dirigida</div></div>
-      </div>
-      <div class="lvl-bar">
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">Nivel ${creativeData.level}</span>
-        <div class="lvl-track"><div class="lvl-fill" style="width:${Math.round(creativeData.level / 3 * 100)}%;background:${creativeData.level >= 2 ? '#34d399' : '#fbbf24'}"></div></div>
-        <span style="font-size:11px;color:${creativeData.level >= 2 ? '#34d399' : '#fbbf24'};white-space:nowrap">${creativeData.level >= 2 ? 'CREATIVO' : 'ASISTIDO'}</span>
-      </div>
-      ${creativeData.level < 2 ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Faltan ${10 - (creativeData.protected_for_level2 || 0)} contratos para Nivel 2</div>` : ''}
-      <div class="il-stat-row">
-        <div class="il-stat"><div class="il-stat-val va">${creativeData.suggestions}</div><div class="il-stat-lbl">Pendientes</div></div>
-        <div class="il-stat"><div class="il-stat-val vg">${creativeData.wins}</div><div class="il-stat-lbl">Aplicadas</div></div>
-      </div>
-      ${creativeData.recent_suggestions && creativeData.recent_suggestions.length > 0 ? `
-        ${creativeData.recent_suggestions.map(s => `
-          <div class="sug-row">
-            <span class="sug-type ${s.auto_applicable ? 'sug-auto' : ''}">${s.type}</span>
-            <span class="sug-txt" title="${escHtml(s.title)}">${escHtml(s.title.substring(0,50))}</span>
-          </div>`).join('')}` : `<div class="empty-state">Sin sugerencias todavía</div>`}
-    </div>
-
-    <div class="il-card">
-      <div class="il-card-head">
-        <div class="il-card-icon icon-g">🔬</div>
-        <div><div class="il-card-name">MemCurator</div><div class="il-card-sub">Gobernanza autónoma</div></div>
-      </div>
-      <div class="cur-row"><span class="cur-k">Última curation</span><span class="cur-v">${curatorData.lastRun}</span></div>
-      <div class="cur-row"><span class="cur-k">Auto-run</span><span class="cur-v">cada 10 ciclos</span></div>
-      <div class="cur-row"><span class="cur-k">TTL episódico</span><span class="cur-v">30 días</span></div>
-      <div class="cur-row"><span class="cur-k">Límite nodos</span><span class="cur-v">1,000</span></div>
-      <div class="cur-row"><span class="cur-k">Dedup threshold</span><span class="cur-v">92% Jaccard</span></div>
-      <div style="margin-top:10px;font-size:11px;color:var(--text3)">
-        <code style="color:#a5b4fc">akdd cure</code> — manual &nbsp;·&nbsp; <code style="color:#a5b4fc">akdd cure report</code> — preview
-      </div>
-    </div>
-  </div>
-
-  <div class="obs-panel">
-    <div class="obs-head">
-      <span style="font-size:18px">🗂️</span>
-      <span style="font-size:13px;font-weight:700;color:var(--text)">Obsidian MCP</span>
-      <span class="obs-badge">OPCIONAL</span>
-    </div>
-    <div class="obs-txt">Conecta tu vault de Obsidian como fuente humana de conocimiento. Tus notas fluyen al grafo sin hacer <code style="color:#a5b4fc">akdd knowledge</code> manual.</div>
-    <code class="obs-cmd">1. Instalar plugin "Obsidian MCP Server" en Obsidian → 2. Agregar el servidor MCP en Cursor/Claude Code → 3. La herramienta obsidian_read_notes queda disponible en el chat</code>
-    <div style="font-size:11px;color:var(--text3);margin-top:7px">Sin Obsidian: usa <code style="color:#a5b4fc">akdd knowledge</code> — mismo resultado.</div>
-  </div>
 
 </div>
 
@@ -1483,21 +830,6 @@ function setMode(mode,el){
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('mode-graph').style.display=mode==='graph'?'flex':'none';
-  const intelEl = document.getElementById('mode-intel');
-  const contentEl = document.querySelector('.content');
-  if(intelEl) {
-    if(mode === 'intel') {
-      if(contentEl) contentEl.style.display = 'none';
-      intelEl.style.display = 'flex';
-      intelEl.style.flex = '1';
-      intelEl.style.flexDirection = 'column';
-      intelEl.style.overflowY = 'auto';
-      intelEl.style.width = '100%';
-    } else {
-      if(contentEl) contentEl.style.display = 'flex';
-      intelEl.style.display = 'none';
-    }
-  }
   document.getElementById('mode-docs').style.display=mode==='docs'?'flex':'none';
   if(mode==='docs')setTimeout(renderModuleGraph,100);
 }
@@ -1721,43 +1053,6 @@ function centerGraph(){
   simulation.force('center',d3.forceCenter(c.clientWidth/2,c.clientHeight/2)).alpha(0.3).restart();
 }
 
-// ─── Graph interaction helpers ────────────────────────────────
-function updatePinIndicator(el, pinned){
-  if(!el)return;
-  d3.select(el).classed('node-pinned', pinned);
-}
-
-function unpinNode(d, el){
-  d.fx=null; d.fy=null;
-  if(el) d3.select(el).classed('node-pinned', false);
-  simulation.alpha(0.2).restart();
-}
-
-function releaseAll(){
-  if(!nodeSel)return;
-  NODES.forEach(n=>{n.fx=null;n.fy=null;});
-  nodeSel.classed('node-pinned', false);
-  simulation.alpha(0.5).restart();
-}
-
-function spreadGraph(){
-  if(!simulation)return;
-  simulation.force('charge',d3.forceManyBody().strength(d=>(DEGREE_MAP[d.id]||0)>=GOD_THRESHOLD?-1200:-700));
-  simulation.alpha(0.8).restart();
-  setTimeout(()=>{
-    const repVal = parseInt(document.getElementById('repulsion-slider')?.value||320);
-    simulation.force('charge',d3.forceManyBody().strength(d=>(DEGREE_MAP[d.id]||0)>=GOD_THRESHOLD?-(repVal*2):-(repVal)));
-    simulation.alpha(0.1).restart();
-  }, 1800);
-}
-
-function setRepulsion(val){
-  val = parseInt(val);
-  if(!simulation)return;
-  simulation.force('charge',d3.forceManyBody().strength(d=>(DEGREE_MAP[d.id]||0)>=GOD_THRESHOLD?-(val*2):-(val)));
-  simulation.alpha(0.3).restart();
-}
-
 // ─── D3 Knowledge Graph ───────────────────────────────────────
 function renderGraph(){
   if(!NODES.length)return;
@@ -1786,7 +1081,7 @@ function renderGraph(){
       const sd=DEGREE_MAP[d.source.id]||0, td=DEGREE_MAP[d.target.id]||0;
       return sd>=GOD_THRESHOLD||td>=GOD_THRESHOLD?120:90;
     }))
-    .force('charge',d3.forceManyBody().strength(d=>(DEGREE_MAP[d.id]||0)>=GOD_THRESHOLD?-600:-320))
+    .force('charge',d3.forceManyBody().strength(d=>(DEGREE_MAP[d.id]||0)>=GOD_THRESHOLD?-300:-150))
     .force('center',d3.forceCenter(W/2,H/2))
     .force('collision',d3.forceCollide(d=>getNodeRadius(d)+4));
 
@@ -1808,9 +1103,8 @@ function renderGraph(){
     .style('cursor','pointer')
     .call(d3.drag()
       .on('start',(ev,d)=>{if(!ev.active)simulation.alphaTarget(0.3).restart();d.fx=d.x;d.fy=d.y;})
-      .on('drag',(ev,d)=>{d.fx=ev.x;d.fy=ev.y;updatePinIndicator(ev.currentTarget,true);})
-      .on('end',(ev,d)=>{if(!ev.active)simulation.alphaTarget(0);/* node stays PINNED — dblclick to release */}))
-    .on('dblclick',(ev,d)=>{ev.stopPropagation();unpinNode(d,ev.currentTarget);})
+      .on('drag',(ev,d)=>{d.fx=ev.x;d.fy=ev.y;})
+      .on('end',(ev,d)=>{if(!ev.active)simulation.alphaTarget(0);d.fx=null;d.fy=null;}))
     .on('click',(ev,d)=>{ev.stopPropagation();selectNode(d.id);})
     .on('mouseover',(ev,d)=>{
       const tt=document.getElementById('gtt');
@@ -2027,26 +1321,25 @@ function copyMarkdown(){
 renderNodeList();
 renderGraph();
 </script>
-
-  </body>
+</body>
 </html>`;
 
-const server = require('http').createServer((req, res) => {
+const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(HTML);
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
-  console.log(`\n  Agentic KDD Dashboard v4`);
-  console.log(`  → ${url}\n`);
-  // Open browser
-  const { exec } = require('child_process');
-  const cmd = process.platform === 'win32' ? `start "" "${url}"`
-            : process.platform === 'darwin' ? `open "${url}"`
-            : `xdg-open "${url}"`;
-  exec(cmd, (err) => {
-    if (err) console.log(`  Open manually: ${url}`);
-  });
-  console.log('  Press Ctrl+C to stop\n');
+  console.log('\n  \x1b[34mAgentic KDD Dashboard v4\x1b[0m');
+  console.log(`  Project: ${config.nombre}`);
+  console.log(`  Nodes: ${stats.total} | Divine: ${stats.godNodes} | Surprising: ${stats.surprising} | HIGH: ${stats.high}`);
+  console.log(`\n  \x1b[36m→ ${url}\x1b[0m\n`);
+  console.log('  Ctrl+C to stop\n');
+  try {
+    const cmd = process.platform === 'win32' ? `start ${url}` : process.platform === 'darwin' ? `open ${url}` : `xdg-open ${url}`;
+    require('child_process').execSync(cmd, { stdio: 'ignore' });
+  } catch {}
 });
+
+process.on('SIGINT', () => { server.close(); console.log('\n  Stopped.\n'); process.exit(0); });

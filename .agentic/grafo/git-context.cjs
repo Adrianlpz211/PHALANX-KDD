@@ -56,7 +56,7 @@ function getDiff(projectPath) {
       archivos_modificados: [...archivos],
       archivos_nuevos: untracked.split('\n').filter(Boolean),
       diff_stat: diffContent,
-      tiene_cambios: archivos.size > 0
+      tiene_cambios: archivos.size > 0 || untracked.split('\n').filter(Boolean).length > 0
     };
   } catch(e) { return { archivos_modificados: [], archivos_nuevos: [], diff_stat: '', tiene_cambios: false }; }
 }
@@ -66,12 +66,12 @@ function getCommitsRecientes(projectPath, n) {
   n = n || 5;
   try {
     const log = execSync(
-      `git log --oneline -${n} --format="%H|%s|%ai|%an"`,
+      `git log --oneline -${n} --format="%H%x1f%s%x1f%ai%x1f%an"`,
       { cwd: projectPath, stdio: 'pipe' }
     ).toString().trim();
-    
+    // Separador \x1f (unit separator) en vez de '|' — no aparece en mensajes de commit
     return log.split('\n').filter(Boolean).map(line => {
-      const [hash, mensaje, fecha, autor] = line.split('|');
+      const [hash, mensaje, fecha, autor] = line.split('\x1f');
       return { hash: hash?.slice(0, 8), mensaje, fecha, autor };
     });
   } catch(e) { return []; }

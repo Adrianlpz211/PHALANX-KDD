@@ -244,13 +244,14 @@ function registrarModulos(db) {
     // Add modules not already listed
     let newModuleLines = '';
     for (const mod of modules) {
+      const modEsc = String(mod).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escapar regex
       const modLine = `- **${mod}** — ${testsPassing} tests ✅`;
       if (!existingImpl.includes(`**${mod}**`)) {
         newModuleLines += modLine + '\n';
       } else {
         // Update existing line
         config = config.replace(
-          new RegExp(`- \\*\\*${mod}\\*\\*.*`),
+          new RegExp(`- \\*\\*${modEsc}\\*\\*.*`),
           modLine
         );
       }
@@ -628,7 +629,7 @@ function main() {
   // Step 1: Register cycle
   if (!silent) process.stdout.write('  1. Registrando ciclo... ');
   results.ciclo = registrarCiclo(db, {});
-  if (!silent) console.log(results.ciclo ? `✅ ${results.ciclo.slice(0,8)}` : '⚠️  (continuando)');
+  if (!silent) console.log(results.ciclo ? `✅ ${String(results.ciclo).slice(0,8)}` : '⚠️  (continuando)');
 
   // Step 2: Register contracts
   if (!silent) process.stdout.write('  2. Registrando contratos... ');
@@ -671,7 +672,7 @@ function main() {
   if (!silent) {
     console.log('\n══════════════════════════════════════════════════');
     console.log('  ✅ Post-Cycle completado');
-    console.log(`  Ciclo: ${results.ciclo ? results.ciclo.slice(0,8) : '—'} | Contratos: ${results.contratos?.success ? '✅' : '⚠️'}`);
+    console.log(`  Ciclo: ${results.ciclo ? String(results.ciclo).slice(0,8) : '—'} | Contratos: ${results.contratos?.success ? '✅' : '⚠️'}`);
     console.log(`  Módulos: ${results.modulos.length} | Patrones: ${results.patrones.length} nuevos | Specs: ${results.specs.length}`);
     console.log('══════════════════════════════════════════════════\n');
   }

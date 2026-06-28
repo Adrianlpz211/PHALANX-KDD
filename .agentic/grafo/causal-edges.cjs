@@ -427,7 +427,9 @@ function pruneEdges(db, options = {}) {
       SELECT id FROM relaciones_semanticas
       WHERE tipo IN ('caused_failure','was_fixed_by','tested_by','regressed_by')
         AND (invalid_at IS NULL OR invalid_at = '')
-        AND (confidence IS NULL OR CAST(confidence AS REAL) < ?)
+        AND (confidence IS NULL OR (CASE confidence
+              WHEN 'ALTA' THEN 1.0 WHEN 'MEDIA' THEN 0.5 WHEN 'BAJA' THEN 0.2
+              ELSE COALESCE(CAST(confidence AS REAL), 0) END) < ?)
         AND julianday('now') - julianday(COALESCE(valid_at, datetime('now'))) > ?
     `).all(minConf, ageDays);
 
@@ -465,7 +467,9 @@ function pruneEdges(db, options = {}) {
           WHERE desde_entidad = ?
             AND tipo IN ('caused_failure','was_fixed_by','tested_by','regressed_by')
             AND (invalid_at IS NULL OR invalid_at = '')
-          ORDER BY COALESCE(confidence, 0) ASC, valid_at ASC
+          ORDER BY (CASE confidence
+              WHEN 'ALTA' THEN 1.0 WHEN 'MEDIA' THEN 0.5 WHEN 'BAJA' THEN 0.2
+              ELSE COALESCE(CAST(confidence AS REAL), 0) END) ASC, valid_at ASC
           LIMIT ?
         `).all(desde_entidad, excess);
 

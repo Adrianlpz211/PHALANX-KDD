@@ -187,6 +187,7 @@ async function collabJoin(projectRoot, urlOrCode, token) {
 
   let finalUrl = urlOrCode;
   let finalToken = token;
+  let finalProjectId = null; // del server si lo provee → evita recalcular un id distinto en invite
 
   // Detectar si es un código de invitación (formato: PREFIX-XXXXXX)
   const isInviteCode = !urlOrCode?.startsWith('libsql://') && !urlOrCode?.startsWith('http');
@@ -208,6 +209,7 @@ async function collabJoin(projectRoot, urlOrCode, token) {
 
       finalUrl   = result.url;
       finalToken = result.token;
+      finalProjectId = result.project_id || null;
       console.log(`[COLLAB] ✅ Código válido. Conectando a: ${result.db}`);
     } catch (e) {
       console.error('[COLLAB] Error resolviendo código:', e.message);
@@ -219,6 +221,7 @@ async function collabJoin(projectRoot, urlOrCode, token) {
     enabled: true,
     url: finalUrl,
     token: finalToken,
+    project_id: finalProjectId || getProjectId(projectRoot), // persistir para que invite no recalcule otro
     member_id: os.userInfo().username,
     sync_on_cycle_end: true,
     last_sync: null,
@@ -304,11 +307,18 @@ async function syncUp(projectRoot) {
 
   for (const table of SYNC_TABLES) {
     try {
-      // Solo filas nuevas/modificadas desde el último sync
+      // Solo filas nuevas/modificadas desde el último sync.
+      // Verificar que la columna de fecha exista; si no, sincronizar todas las filas
+      // (antes lanzaba "no such column" y el catch mudo dejaba la tabla sin sincronizar).
       const dateField = getDateField(table);
-      const rows = localDB.prepare(
-        `SELECT * FROM ${table} WHERE ${dateField} > ? LIMIT 500`
-      ).all(lastSync);
+      let hasDateCol = false;
+      try {
+        const cols = localDB.prepare(`PRAGMA table_info(${table})`).all();
+        hasDateCol = cols.some(c => c.name === dateField);
+      } catch {}
+      const rows = hasDateCol
+        ? localDB.prepare(`SELECT * FROM ${table} WHERE ${dateField} > ? LIMIT 500`).all(lastSync)
+        : localDB.prepare(`SELECT * FROM ${table} LIMIT 500`).all();
 
       if (rows.length === 0) continue;
 
@@ -326,7 +336,9 @@ async function syncUp(projectRoot) {
           totalRows++;
         } catch {}
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`[COLLAB] ${table}: no sincronizada — ${e.message}`);
+    }
   }
 
   // Actualizar last_sync
@@ -360,10 +372,16 @@ async function syncDown(projectRoot) {
       const dateField = getDateField(table);
       const lastSync = config.last_sync || '1970-01-01T00:00:00.000Z';
 
-      const rs = await client.execute(
-        `SELECT * FROM ${table} WHERE ${dateField} > ? LIMIT 1000`,
-        [lastSync]
-      );
+      // Si la columna de fecha no existe en remoto, traer todo en vez de fallar en silencio
+      let rs;
+      try {
+        rs = await client.execute(
+          `SELECT * FROM ${table} WHERE ${dateField} > ? LIMIT 1000`,
+          [lastSync]
+        );
+      } catch {
+        rs = await client.execute(`SELECT * FROM ${table} LIMIT 1000`);
+      }
 
       if (!rs.rows?.length) continue;
 
@@ -391,7 +409,9 @@ async function syncDown(projectRoot) {
           totalRows++;
         } catch {}
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`[COLLAB] ${table}: no recibida — ${e.message}`);
+    }
   }
 
   // Actualizar last_sync

@@ -80,11 +80,13 @@ function parseTasks(content) {
   // Resolver dep_ids desde nombres
   for (const task of tasks) {
     task.dep_ids = task.dependencies.map(depName => {
-      const resolved = tasks.find(t =>
-        t.name.toLowerCase().includes(depName.toLowerCase()) ||
-        depName.toLowerCase().includes(t.name.toLowerCase()) ||
-        String(t.id) === depName
-      );
+      const dn = depName.toLowerCase();
+      // Prioridad: id exacto → nombre exacto → (último recurso) inclusión.
+      // El includes bidireccional como primer criterio enlazaba dependencias erróneas.
+      const resolved =
+        tasks.find(t => String(t.id) === depName) ||
+        tasks.find(t => t.name.toLowerCase() === dn) ||
+        tasks.find(t => t.name.toLowerCase().includes(dn) || dn.includes(t.name.toLowerCase()));
       return resolved?.id ?? null;
     }).filter(id => id !== null);
   }

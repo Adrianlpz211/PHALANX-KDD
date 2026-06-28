@@ -303,16 +303,19 @@ async function recall(query, options = {}, projectRoot) {
 
   // Si ninguno tiene resultados, fallback a query simple
   if (bm25Results.length === 0 && vectorResults.length === 0) {
+    const fbParams = [];
+    let fbExtra = '';
+    if (tipo) { fbExtra += " AND tipo = ?"; fbParams.push(tipo); }
+    if (area) { fbExtra += " AND area LIKE ?"; fbParams.push('%' + area + '%'); }
     const fallback = db.prepare(`
       SELECT id, titulo, contenido, area, tipo, confianza, aplicado
       FROM nodos
       WHERE estado = 'ACTIVO'
         AND confianza IN ('ALTA', 'MEDIA')
-        ${tipo ? "AND tipo = '" + tipo + "'" : ''}
-        ${area ? "AND area LIKE '%" + area + "%'" : ''}
+        ${fbExtra}
       ORDER BY aplicado DESC
       LIMIT ?
-    `).all(topK);
+    `).all(...fbParams, topK);
 
     db.close();
     return {

@@ -106,7 +106,7 @@ function detectStale(db) {
       SELECT id, tipo, titulo, confianza, area, ultima_validacion, aplicado, util
       FROM nodos
       WHERE estado = 'ACTIVO'
-        AND vigencia_tipo IN ('VIGENTE', NULL)
+        AND (vigencia_tipo = 'VIGENTE' OR vigencia_tipo IS NULL)
         AND (ultima_validacion IS NULL OR
              julianday('now') - julianday(ultima_validacion) > 90)
       ORDER BY ultima_validacion ASC LIMIT 50

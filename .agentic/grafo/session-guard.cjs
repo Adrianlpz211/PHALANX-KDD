@@ -62,15 +62,20 @@ function getProjectStats(db) {
 
 function getLastModifiedFiles(db, cicloId) {
   try {
-    const trail = db.prepare(`
-      SELECT descripcion FROM decisiones
-      WHERE ciclo_id = ?
-        AND (descripcion LIKE '%.ts%' OR descripcion LIKE '%.js%'
-             OR descripcion LIKE '%.tsx%' OR descripcion LIKE '%.jsx%'
-             OR descripcion LIKE '%.py%')
-      LIMIT 5
+    // La tabla 'decisiones' no existe; los archivos tocados viven en episodios.archivos_tocados (JSON array)
+    const rows = db.prepare(`
+      SELECT archivos_tocados FROM episodios
+      WHERE ciclo_id = ? AND archivos_tocados IS NOT NULL AND archivos_tocados != '[]'
+      ORDER BY fecha DESC LIMIT 10
     `).all(cicloId);
-    return trail.map(t => t.descripcion?.substring(0, 60)).filter(Boolean);
+    const files = [];
+    for (const r of rows) {
+      try {
+        const arr = JSON.parse(r.archivos_tocados);
+        if (Array.isArray(arr)) files.push(...arr);
+      } catch {}
+    }
+    return [...new Set(files)].filter(Boolean).slice(0, 5);
   } catch { return []; }
 }
 

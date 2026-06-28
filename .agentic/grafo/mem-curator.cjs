@@ -288,7 +288,7 @@ function resolveConflicts(db, projectRoot) {
       SELECT id, tipo, titulo, contenido, confianza, area, fecha_creacion, fecha_update, vigencia_tipo
       FROM nodos
       WHERE estado = 'ACTIVO' AND vigencia_tipo = 'VIGENTE'
-      ORDER BY fecha_update DESC
+      ORDER BY fecha_creacion DESC
     `).all();
 
     for (let i = 0; i < nodes.length; i++) {

@@ -9,3 +9,10 @@ build/
 __pycache__/
 *.pyc
 vendor/
+
+# Datos del proyecto (memoria del grafo) y caché de modelos — NO publicar
+.agentic/memoria.db
+.agentic/.model_cache/
+
+# Artefactos de auditoría / archivos rotos renombrados — internos, NO publicar
+*.ROTO*

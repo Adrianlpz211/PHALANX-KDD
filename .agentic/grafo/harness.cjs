@@ -362,11 +362,17 @@ async function ejecutarPaso(gateKey, ctx, execFn, opts = {}) {
  * @returns {GateResult}
  */
 function checkScopeDeviation(attempted_files, allowed_files, denylist = []) {
+  const norm = (p) => path.normalize(p).replace(/\\/g, '/');
   const out_of_scope = attempted_files.filter(f => {
-    const inAllowed = allowed_files.some(a =>
+    // Si no hay allowlist definida, no bloquear por allowlist (solo por denylist)
+    const inAllowed = allowed_files.length === 0 || allowed_files.some(a =>
       f.startsWith(a) || f === a || path.normalize(f).startsWith(path.normalize(a))
     );
-    const inDenied = denylist.some(d => f.includes(d));
+    // Denylist por segmento de path, no substring: 'lib/' no debe bloquear 'public-library/'
+    const inDenied = denylist.some(d => {
+      const nf = norm(f), nd = norm(d);
+      return nf === nd || nf.startsWith(nd.endsWith('/') ? nd : nd + '/');
+    });
     return !inAllowed || inDenied;
   });
 

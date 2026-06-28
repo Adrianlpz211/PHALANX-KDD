@@ -202,10 +202,15 @@ async function main() {
     agregarAMemoria(md, tipo);
 
     console.log('\n✓ Sincronizando grafo...');
-    require('child_process').execSync(
-      `node "${path.join(__dirname, 'grafo.js')}" sync`,
-      { stdio: 'pipe' }
-    );
+    // Aislar el sync: si falla, NO debe disparar el catch que duplica la entrada (ya guardada en L202)
+    try {
+      require('child_process').execSync(
+        `node "${path.join(__dirname, 'grafo.cjs')}" sync`,
+        { stdio: 'pipe' }
+      );
+    } catch (syncErr) {
+      console.log(`⚠ Entidades guardadas, pero el sync del grafo falló: ${syncErr.message}`);
+    }
 
     console.log('✓ Listo — entidades agregadas a la memoria y al grafo\n');
 

@@ -63,8 +63,10 @@ function detectAvailableModel(projectRoot) {
   // 1. Verificar si jina está en cache local del proyecto
   const localCache = path.join(projectRoot || process.cwd(), '.agentic', '.model_cache');
   if (fs.existsSync(localCache)) {
-    const jinaDir = path.join(localCache, 'models--jinaai--jina-embeddings-v2-base-code');
-    if (fs.existsSync(jinaDir)) {
+    // @xenova/transformers guarda como <org>/<model>; HF-Python como models--<org>--<model>
+    const jinaXenova = path.join(localCache, ...MODELS.JINA_CODE.id.split('/'));
+    const jinaHF = path.join(localCache, 'models--jinaai--jina-embeddings-v2-base-code');
+    if (fs.existsSync(jinaXenova) || fs.existsSync(jinaHF)) {
       _available = 'jina';
       return 'jina';
     }
@@ -245,6 +247,7 @@ async function installJina(projectRoot) {
   } catch (e) {
     console.error('[EMBEDDINGS] Error instalando jina:', e.message);
     console.log('[EMBEDDINGS] Alternativa: akdd embed-install (all-MiniLM-L6-v2, 23MB)\n');
+    process.exitCode = 1;
   }
 }
 
@@ -276,6 +279,67 @@ async function installMini(projectRoot) {
   } catch (e) {
     console.error('[EMBEDDINGS] Error:', e.message);
   }
+}
+
+// ─── Compat shim: API vieja que grafo.cjs todavía consume ───────────────────────
+// El módulo fue reescrito (stateless: embed/semanticSearch) pero grafo.cjs sigue
+// llamando la API previa. Estos wrappers evitan crashes y degradan con elegancia.
+function isAvailable(projectRoot) {
+  return detectAvailableModel(projectRoot) !== false;
+}
+// Instalación por defecto = modelo ligero (equivalente al viejo instalar()).
+const instalar = installMini;
+// Búsqueda vectorial: firma vieja (items, query, topK) → semanticSearch(query, items, topK).
+// Los items vienen de la DB con `embedding` como JSON string → parsear a array para que
+// semanticSearch (que exige Array.isArray) pueda rankearlos.
+async function buscarHibridoVectorial(items, query, topK = 10, projectRoot) {
+  const parsed = (items || []).map(it => {
+    if (it && typeof it.embedding === 'string' && it.embedding) {
+      try { return { ...it, embedding: JSON.parse(it.embedding) }; } catch { return it; }
+    }
+    return it;
+  });
+  return semanticSearch(query, parsed, topK, projectRoot);
+}
+
+// Indexado de embeddings en DB: calcula y persiste el vector de los nodos que aún no lo
+// tienen (o que fueron embebidos con otro modelo). Esto es lo que hace funcionar la
+// búsqueda vectorial real (recall/akdd buscar) en vez de degradar a BM25/texto.
+// `db` puede ser el adapter de grafo.cjs (tiene .prepare) o una instancia better-sqlite3.
+async function indexarPendientes(db, limite = 50, projectRoot) {
+  const root = projectRoot || process.cwd();
+  const available = detectAvailableModel(root);
+  if (!available || !db || typeof db.prepare !== 'function') {
+    return { indexados: 0, motivo: 'sin modelo de embeddings o db inválida' };
+  }
+  const modelName = available === 'jina' ? MODELS.JINA_CODE.name : MODELS.MINI_LM.name;
+
+  let pendientes = [];
+  try {
+    pendientes = db.prepare(`
+      SELECT id, titulo, contenido
+      FROM nodos
+      WHERE estado = 'ACTIVO'
+        AND (embedding IS NULL OR embedding = ''
+             OR embedding_modelo IS NULL OR embedding_modelo != ?)
+      LIMIT ?
+    `).all(modelName, limite);
+  } catch (e) { return { indexados: 0, error: e.message }; }
+
+  let indexados = 0;
+  for (const nodo of pendientes) {
+    const texto = `${nodo.titulo || ''}\n${nodo.contenido || ''}`.trim();
+    if (!texto) continue;
+    const vec = await embed(texto, root);
+    if (!vec || !vec.length) continue;
+    try {
+      db.prepare("UPDATE nodos SET embedding = ?, embedding_modelo = ? WHERE id = ?")
+        .run(JSON.stringify(vec), modelName, nodo.id);
+      indexados++;
+    } catch {}
+  }
+  if (typeof db.save === 'function') db.save();
+  return { indexados, modelo: modelName };
 }
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
@@ -317,4 +381,6 @@ if (require.main === module) {
   }
 }
 
-module.exports = { embed, cosineSim, semanticSearch, getStatus, installJina, installMini, detectAvailableModel, MODELS };
+module.exports = { embed, cosineSim, semanticSearch, getStatus, installJina, installMini, detectAvailableModel, MODELS,
+  // compat shim (API vieja consumida por grafo.cjs)
+  isAvailable, instalar, buscarHibridoVectorial, indexarPendientes };

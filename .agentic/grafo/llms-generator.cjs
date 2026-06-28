@@ -326,7 +326,7 @@ function generateKnowledgeGraph(projectRoot, db) {
   // ADRs
   try {
     graph.decisions = db.prepare(`
-      SELECT doc_id, titulo, decision, status, afecta, fecha_indexado
+      SELECT doc_id, titulo, decision, status, afecta, last_indexed AS fecha_indexado
       FROM knowledge_docs
       WHERE status = 'accepted'
       LIMIT 50

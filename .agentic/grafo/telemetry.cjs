@@ -119,7 +119,7 @@ function startSpan(params = {}, projectRoot) {
   activeSpans[spanId] = { span, projectRoot: projectRoot || process.cwd() };
 
   // Escribir span abierto (para auditoría de crashes)
-  const file = getTraceFile(span._start_ms && projectRoot, traceId);
+  const file = getTraceFile(projectRoot || process.cwd(), traceId);
   try {
     const { _start_ms, ...logSpan } = span;
     appendLine(file, { ...logSpan, status: 'open' });

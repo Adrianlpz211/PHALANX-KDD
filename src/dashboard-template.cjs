@@ -49,67 +49,10 @@ function readConfig() {
       return result.join('\n').trim();
     };
 
-    // Leer stack — soporta múltiples formatos de config.md
+    // Leer yaml block para stack
     const getYaml = (key) => {
-      // Formato 1: yaml "  key: value"
-      let m = c.match(new RegExp('  ' + key + ': (.+)'));
-      if (m) return m[1].trim();
-      // Formato 2: markdown bold "**KEY:** value" (case insensitive)
-      m = c.match(new RegExp('\\*\\*' + key + '\\*\\*:?\\s*(.+)', 'i'));
-      if (m) return m[1].replace(/\*\*/g,'').trim();
-      // Formato 3: uppercase "KEY: value"
-      m = c.match(new RegExp('(?:^|\n)' + key.toUpperCase() + ': (.+)'));
-      if (m) return m[1].trim();
-      return '—';
-    };
-
-    // Extraer stack completo si existe como campo STACK
-    const getStack = () => {
-      const m = c.match(/(?:STACK|stack|Stack):?\s*(.+)/);
-      return m ? m[1].replace(/\*\*/g,'').trim() : null;
-    };
-    const stackFull = getStack();
-
-    // Para framework: intentar detectar de package.json si config.md no lo tiene
-    const getPkgJson = (field) => {
-      try {
-        const pkg = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf8'));
-        const deps = {...(pkg.dependencies||{}), ...(pkg.devDependencies||{})};
-        if (field === 'framework') {
-          if (deps['next']) return 'Next.js ' + (deps['next']||'');
-          if (deps['express']) return 'Express';
-          if (deps['fastify']) return 'Fastify';
-          if (deps['@nestjs/core']) return 'NestJS';
-          if (deps['hono']) return 'Hono';
-        }
-        if (field === 'language') {
-          if (deps['typescript'] || deps['ts-node']) return 'TypeScript';
-          return 'JavaScript';
-        }
-        if (field === 'runtime') {
-          return 'Node.js ' + (pkg.engines?.node || '18+');
-        }
-        if (field === 'base_datos') {
-          if (deps['@prisma/client']) return 'Prisma';
-          if (deps['pg'] || deps['postgres']) return 'PostgreSQL';
-          if (deps['mysql2']) return 'MySQL';
-          if (deps['better-sqlite3']) return 'SQLite';
-        }
-        if (field === 'package_manager') {
-          if (fs.existsSync(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-          if (fs.existsSync(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
-          return 'npm';
-        }
-      } catch {}
-      return null;
-    };
-
-    const smartGet = (key) => {
-      const fromYaml = getYaml(key);
-      if (fromYaml && fromYaml !== '—') return fromYaml;
-      const fromPkg = getPkgJson(key);
-      if (fromPkg) return fromPkg;
-      return stackFull || '—';
+      const m = c.match(new RegExp('  ' + key + ': (.+)'));
+      return m ? m[1].trim() : '—';
     };
 
     return {
@@ -121,12 +64,11 @@ function readConfig() {
         return get('Descripción');
       })(),
       tipo: get('Tipo'),
-      framework: smartGet('framework'),
-      language: smartGet('language'),
-      runtime: smartGet('runtime'),
-      base_datos: smartGet('base_datos'),
-      package_manager: smartGet('package_manager'),
-      stack: stackFull,
+      framework: getYaml('framework'),
+      language: getYaml('language'),
+      runtime: getYaml('runtime'),
+      base_datos: getYaml('base_datos'),
+      package_manager: getYaml('package_manager'),
       cmd_dev: getYaml('dev'),
       cmd_test: getYaml('test'),
       cmd_build: getYaml('build'),
@@ -306,7 +248,10 @@ function getGraphData() {
     // Intentar better-sqlite3 primero, fallback a sql.js
     try {
       const BS3 = require('better-sqlite3');
-      // (Se eliminó un wrapper `db` muerto que abría una conexión nueva por query sin cerrarla.)
+      db = { 
+        all: (sql, ...p) => BS3(dbPath, {readonly:true}).prepare(sql).all(...p),
+        close: () => {}
+      };
       const _db = new BS3(dbPath, { readonly: true });
       const nodes = _db.prepare('SELECT * FROM nodos ORDER BY fecha_creacion DESC').all();
       const edges = _db.prepare('SELECT * FROM relaciones').all();
@@ -345,69 +290,63 @@ function getGraphData() {
 
 // ─── v3.3: CONTRACT GUARD DATA ────────────────────────────────────────────────
 function getContractData() {
-  const empty = { total:0, protected:0, verified:0, candidate:0, violations:0, recent:[] };
-  if (!fs.existsSync(dbPath)) return empty;
-  let _db;
   try {
+    if (!fs.existsSync(dbPath)) return { total:0, protected:0, verified:0, candidate:0, violations:0, recent:[] };
     const BS3 = require('better-sqlite3');
-    _db = new BS3(dbPath, { readonly: true });
-    const safe = (fn) => { try { return fn(); } catch { return null; } };
-    return {
-      total:     safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts").get()?.n) || 0,
-      protected: safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='protected'").get()?.n) || 0,
-      verified:  safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='verified'").get()?.n) || 0,
-      candidate: safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='candidate'").get()?.n) || 0,
-      violations:safe(() => _db.prepare("SELECT COUNT(*) as n FROM contract_violations WHERE recovered=0").get()?.n) || 0,
-      recent:    safe(() => _db.prepare("SELECT id, module, name, status, verification_count, failure_count FROM verified_contracts ORDER BY updated_at DESC LIMIT 8").all()) || [],
-    };
-  } catch { return empty; } finally { try { _db && _db.close(); } catch {} }
+    const _db = new BS3(dbPath, { readonly: true });
+    let result = { total:0, protected:0, verified:0, candidate:0, invalidated:0, violations:0, recent:[] };
+    try {
+      result.total     = _db.prepare("SELECT COUNT(*) as n FROM verified_contracts").get()?.n || 0;
+      result.protected = _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='protected'").get()?.n || 0;
+      result.verified  = _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='verified'").get()?.n || 0;
+      result.candidate = _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='candidate'").get()?.n || 0;
+      result.invalidated= _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status='invalidated'").get()?.n || 0;
+      result.violations= _db.prepare("SELECT COUNT(*) as n FROM contract_violations WHERE recovered=0").get()?.n || 0;
+      result.recent    = _db.prepare("SELECT id, module, name, status, verification_count, failure_count FROM verified_contracts ORDER BY updated_at DESC LIMIT 8").all();
+    } catch {}
+    _db.close();
+    return result;
+  } catch { return { total:0, protected:0, verified:0, candidate:0, violations:0, recent:[] }; }
 }
 
+// ─── v3.3: CREATIVE ENGINE DATA ───────────────────────────────────────────────
 function getCreativeData() {
-  const empty = { level:1, suggestions:0, wins:0, auto_applicable:0, recent_suggestions:[], protected_for_level2:0 };
-  if (!fs.existsSync(dbPath)) return empty;
-  let _db;
   try {
+    if (!fs.existsSync(dbPath)) return { level:1, suggestions:0, wins:0, auto_applicable:0, recent_suggestions:[] };
     const BS3 = require('better-sqlite3');
-    _db = new BS3(dbPath, { readonly: true });
-    const safe = (fn) => { try { return fn(); } catch { return null; } };
-    const protCount = safe(() => _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status IN ('protected','verified')").get()?.n) || 0;
-    return {
-      level:              protCount >= 10 ? 2 : 1,
-      protected_for_level2: protCount,
-      suggestions:        safe(() => _db.prepare("SELECT COUNT(*) as n FROM creative_suggestions WHERE applied=0 AND dismissed=0").get()?.n) || 0,
-      wins:               safe(() => _db.prepare("SELECT COUNT(*) as n FROM creative_wins").get()?.n) || 0,
-      auto_applicable:    safe(() => _db.prepare("SELECT COUNT(*) as n FROM creative_suggestions WHERE auto_applicable=1 AND applied=0 AND dismissed=0").get()?.n) || 0,
-      recent_suggestions: safe(() => _db.prepare("SELECT id, type, title, risk_level, module, auto_applicable FROM creative_suggestions WHERE applied=0 AND dismissed=0 ORDER BY created_at DESC LIMIT 5").all()) || [],
-    };
-  } catch { return empty; } finally { try { _db && _db.close(); } catch {} }
+    const _db = new BS3(dbPath, { readonly: true });
+    let result = { level:1, suggestions:0, wins:0, auto_applicable:0, recent_suggestions:[] };
+    try {
+      result.suggestions     = _db.prepare("SELECT COUNT(*) as n FROM creative_suggestions WHERE applied=0 AND dismissed=0").get()?.n || 0;
+      result.wins            = _db.prepare("SELECT COUNT(*) as n FROM creative_wins").get()?.n || 0;
+      result.auto_applicable = _db.prepare("SELECT COUNT(*) as n FROM creative_suggestions WHERE auto_applicable=1 AND applied=0 AND dismissed=0").get()?.n || 0;
+      // Determine level from protected contracts
+      const protected_count = _db.prepare("SELECT COUNT(*) as n FROM verified_contracts WHERE status IN ('protected','verified')").get()?.n || 0;
+      result.level = protected_count >= 10 ? 2 : 1;
+      result.protected_for_level2 = protected_count;
+      result.recent_suggestions = _db.prepare("SELECT id, type, title, risk_level, module, auto_applicable FROM creative_suggestions WHERE applied=0 AND dismissed=0 ORDER BY created_at DESC LIMIT 5").all();
+    } catch {}
+    _db.close();
+    return result;
+  } catch { return { level:1, suggestions:0, wins:0, auto_applicable:0, recent_suggestions:[] }; }
 }
 
+// ─── v3.3: MEM CURATOR DATA ───────────────────────────────────────────────────
 function getCuratorData() {
   try {
     const logPath = path.join(projectPath, '.agentic', 'curator.log');
-    let lastRun = 'nunca';
+    let lastRun = 'nunca', actions = 0;
     if (fs.existsSync(logPath)) {
       const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean);
       if (lines.length > 0) {
-        const match = lines[lines.length-1].match(/\[([^\]]+)\]/);
+        const last = lines[lines.length-1];
+        const match = last.match(/\[([^\]]+)\]/);
         if (match) lastRun = match[1].split('T')[0];
+        actions = lines.filter(l => l.includes('mergeados') || l.includes('comprimidos') || l.includes('resueltos')).length;
       }
     }
-    return { lastRun };
-  } catch { return { lastRun: 'nunca' }; }
-}
-
-
-// ─── v3.3: EFFECTIVENESS REPORT DATA ─────────────────────────────────────────
-function getEffectivenessData() {
-  const empty = { total_cycles:0, metrics:{}, summary:{ improving:[], needs_work:[], stable:[] } };
-  if (!fs.existsSync(dbPath)) return empty;
-  try {
-    const { generateReport } = require(path.join(__dirname, '.agentic/grafo/effectiveness-report.cjs'));
-    const r = generateReport(__dirname);
-    return r.error ? empty : r;
-  } catch { return empty; }
+    return { lastRun, actions };
+  } catch { return { lastRun: 'nunca', actions: 0 }; }
 }
 
 
@@ -462,7 +401,6 @@ function parseModulos(text) {
 }
 
 const contractData   = getContractData();
-const effectData     = getEffectivenessData();
 const creativeData   = getCreativeData();
 const curatorData    = getCuratorData();
 const modulosImpl = parseModulos(config.implementados);
@@ -491,7 +429,7 @@ function buildModuleGraph() {
   // Crear nodos de módulos implementados
   modulosImpl.forEach((m, i) => {
     const area = m.toLowerCase().replace(/\s+/g, '-').split(/[\s\/\-]/)[0];
-    const stats = areaCount[area] || { errors: 0, patterns: 0, decisions: 0, high: 0 };
+    const stats = areaCount[area] || areaCount['global'] || { errors: 0, patterns: 0, decisions: 0, high: 0 };
     mNodes.push({ id: 'impl-' + i, label: m, tipo: 'impl', area, errors: stats.errors, patterns: stats.patterns, high: stats.high, degree: stats.errors + stats.patterns + stats.decisions });
   });
 
@@ -572,7 +510,7 @@ const HTML = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Agentic KDD — ${escHtml(config.nombre)}</title>
+<title>Agentic KDD — ${config.nombre}</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
 :root{--bg:#0a0d14;--bg2:#111520;--bg3:#1a1f2e;--bg4:#232840;--border:#2a3050;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--purple:#8b5cf6;--pl:#a78bfa;--green:#10b981;--red:#ef4444;--blue:#3b82f6;--amber:#f59e0b;--cyan:#06b6d4;--pink:#ec4899;--r:12px}
@@ -810,7 +748,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="mode-tabs">
   <div class="mode-tab active" onclick="setMode('graph',this)">🧠 <span data-i="tab_graph">Knowledge Graph</span></div>
   <div class="mode-tab" onclick="setMode('docs',this)">📚 <span data-i="tab_docs">Project Docs</span></div>
-  <div class="mode-tab" onclick="setMode('intel',this)">🛡️ Preservation Intel</div>
 </div>
 
 <div class="content">
@@ -995,12 +932,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         <div class="docs-h1" data-i="h_stack">Tech Stack</div>
         <div class="docs-sub" data-i="sub_stack">Technologies and frameworks used in this project.</div>
         <div class="stack-grid">
-          <div class="stack-item"><div class="si-label">Framework</div><div class="si-val">${config.framework && config.framework !== '—' ? config.framework : (config.stack || '—')}</div></div>
-          <div class="stack-item"><div class="si-label">Language</div><div class="si-val">${config.language && config.language !== '—' ? config.language : '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Runtime</div><div class="si-val">${config.runtime && config.runtime !== '—' ? config.runtime : '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Database</div><div class="si-val">${config.base_datos && config.base_datos !== '—' ? config.base_datos : '—'}</div></div>
-          <div class="stack-item"><div class="si-label">Package Manager</div><div class="si-val">${config.package_manager && config.package_manager !== '—' ? config.package_manager : '—'}</div></div>
-          ${config.stack ? '<div class="stack-item" style="grid-column:1/-1"><div class="si-label">Full Stack</div><div class="si-val">' + escHtml(config.stack) + '</div></div>' : ''}
+          <div class="stack-item"><div class="si-label">Framework</div><div class="si-val">${config.framework || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Language</div><div class="si-val">${config.language || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Runtime</div><div class="si-val">${config.runtime || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Database</div><div class="si-val">${config.base_datos || '—'}</div></div>
+          <div class="stack-item"><div class="si-label">Package Manager</div><div class="si-val">${config.package_manager || '—'}</div></div>
         </div>
         <div class="docs-h2">Commands</div>
         <div class="cmd-row"><div class="cmd-label">dev</div><div class="cmd-val">${config.cmd_dev || '—'}</div></div>
@@ -1326,132 +1262,6 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 </div>
 
-<!-- ════════ PRESERVATION INTEL ════════ -->
-<style>
-  #mode-intel { background: var(--bg); }
-  .il-title { font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin:0 0 12px }
-  .il-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:20px }
-  .il-card { background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px }
-  .il-card-head { display:flex;align-items:center;gap:9px;margin-bottom:12px }
-  .il-card-icon { width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0 }
-  .icon-p { background:rgba(127,119,221,.15) }
-  .icon-g { background:rgba(29,158,117,.15) }
-  .icon-a { background:rgba(239,159,39,.15) }
-  .il-card-name { font-size:13px;font-weight:700;color:var(--text) }
-  .il-card-sub  { font-size:11px;color:var(--text3);margin-top:1px }
-  .il-stat-row { display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px }
-  .il-stat { background:rgba(255,255,255,.03);border-radius:7px;padding:9px;text-align:center }
-  .il-stat-val { font-size:20px;font-weight:800;line-height:1.1 }
-  .il-stat-lbl { font-size:10px;color:var(--text3);margin-top:2px }
-  .vp { color:#9f99e8 } .vg { color:#34d399 } .va { color:#fbbf24 } .vr { color:#f87171 } .vx { color:var(--text2) }
-  .il-list { display:flex;flex-direction:column;gap:5px }
-  .il-row { display:flex;align-items:center;gap:7px;padding:6px 9px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px }
-  .il-badge { font-size:9px;font-weight:700;padding:2px 6px;border-radius:9px;white-space:nowrap;flex-shrink:0 }
-  .bp { background:rgba(127,119,221,.2);color:#9f99e8 }
-  .bv { background:rgba(29,158,117,.2);color:#34d399 }
-  .bc { background:rgba(239,159,39,.2);color:#fbbf24 }
-  .bi { background:rgba(248,113,113,.2);color:#f87171 }
-  .il-row-name { flex:1;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-  .il-row-mod  { font-size:10px;color:var(--text3) }
-  .sug-row { display:flex;align-items:flex-start;gap:7px;padding:6px 9px;background:rgba(255,255,255,.03);border-radius:6px;font-size:12px;margin-bottom:4px }
-  .sug-type { font-size:9px;font-weight:700;padding:2px 6px;border-radius:9px;background:rgba(239,159,39,.15);color:#fbbf24;white-space:nowrap;flex-shrink:0 }
-  .sug-auto { background:rgba(29,158,117,.15);color:#34d399 }
-  .sug-txt  { color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
-  .lvl-bar { display:flex;align-items:center;gap:8px;margin-bottom:10px }
-  .lvl-track { height:5px;flex:1;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden }
-  .lvl-fill  { height:100%;border-radius:3px }
-  .cur-row { display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px }
-  .cur-row:last-child { border-bottom:none }
-  .cur-k { color:var(--text3) } .cur-v { color:var(--text2);font-weight:600 }
-  .empty-state { font-size:12px;color:var(--text3);text-align:center;padding:12px 0 }
-  .obs-panel { background:var(--surface);border:1px solid #3730a3;border-radius:12px;padding:14px 18px;margin-bottom:20px }
-  .obs-head  { display:flex;align-items:center;gap:9px;margin-bottom:9px }
-  .obs-badge { font-size:10px;padding:2px 7px;border-radius:9px;background:rgba(99,91,255,.15);color:#818cf8;font-weight:600 }
-  .obs-txt   { font-size:13px;color:var(--text2);line-height:1.5 }
-  .obs-cmd   { font-family:monospace;font-size:11px;background:rgba(255,255,255,.05);color:#a5b4fc;padding:6px 10px;border-radius:6px;margin-top:8px;display:block }
-  /* fix intel layout */
-  #mode-intel { display:none;flex:1;overflow-y:auto;padding:24px;flex-direction:column;gap:0;align-items:stretch;justify-content:flex-start;box-sizing:border-box; }
-</style>
-<div id="mode-intel" style="display:none;width:100%;height:100%;overflow-y:auto;background:var(--bg);flex-direction:column;align-items:stretch;justify-content:flex-start;padding:24px;box-sizing:border-box;gap:0">
-
-
-
-  <p class="il-title">Contract Guard</p>
-  <div class="il-grid">
-    <div class="il-card">
-      <div class="il-card-head">
-        <div class="il-card-icon icon-p">🛡️</div>
-        <div><div class="il-card-name">Contratos verificados</div><div class="il-card-sub">Lo que no se puede romper</div></div>
-      </div>
-      <div class="il-stat-row">
-        <div class="il-stat"><div class="il-stat-val vp">${contractData.protected}</div><div class="il-stat-lbl">Protected</div></div>
-        <div class="il-stat"><div class="il-stat-val vg">${contractData.verified}</div><div class="il-stat-lbl">Verified</div></div>
-        <div class="il-stat"><div class="il-stat-val va">${contractData.candidate}</div><div class="il-stat-lbl">Candidate</div></div>
-        <div class="il-stat"><div class="il-stat-val ${contractData.violations > 0 ? 'vr' : 'vx'}">${contractData.violations}</div><div class="il-stat-lbl">Violations</div></div>
-      </div>
-      ${contractData.recent && contractData.recent.length > 0 ? `
-      <div class="il-list">
-        ${contractData.recent.map(c => `
-          <div class="il-row">
-            <span class="il-badge b${c.status[0]}">${c.status.toUpperCase()}</span>
-            <span class="il-row-name" title="${escHtml(c.name)}">${escHtml(c.name.substring(0,38))}</span>
-            <span class="il-row-mod">${escHtml(c.module)}</span>
-          </div>`).join('')}
-      </div>` : `<div class="empty-state">Sin contratos — corre ciclos aa: para generarlos</div>`}
-    </div>
-
-    <div class="il-card">
-      <div class="il-card-head">
-        <div class="il-card-icon icon-a">✨</div>
-        <div><div class="il-card-name">Creative Engine</div><div class="il-card-sub">Autonomía creativa dirigida</div></div>
-      </div>
-      <div class="lvl-bar">
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">Nivel ${creativeData.level}</span>
-        <div class="lvl-track"><div class="lvl-fill" style="width:${Math.round(creativeData.level / 3 * 100)}%;background:${creativeData.level >= 2 ? '#34d399' : '#fbbf24'}"></div></div>
-        <span style="font-size:11px;color:${creativeData.level >= 2 ? '#34d399' : '#fbbf24'};white-space:nowrap">${creativeData.level >= 2 ? 'CREATIVO' : 'ASISTIDO'}</span>
-      </div>
-      ${creativeData.level < 2 ? `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Faltan ${10 - (creativeData.protected_for_level2 || 0)} contratos para Nivel 2</div>` : ''}
-      <div class="il-stat-row">
-        <div class="il-stat"><div class="il-stat-val va">${creativeData.suggestions}</div><div class="il-stat-lbl">Pendientes</div></div>
-        <div class="il-stat"><div class="il-stat-val vg">${creativeData.wins}</div><div class="il-stat-lbl">Aplicadas</div></div>
-      </div>
-      ${creativeData.recent_suggestions && creativeData.recent_suggestions.length > 0 ? `
-        ${creativeData.recent_suggestions.map(s => `
-          <div class="sug-row">
-            <span class="sug-type ${s.auto_applicable ? 'sug-auto' : ''}">${s.type}</span>
-            <span class="sug-txt" title="${escHtml(s.title)}">${escHtml(s.title.substring(0,50))}</span>
-          </div>`).join('')}` : `<div class="empty-state">Sin sugerencias todavía</div>`}
-    </div>
-
-    <div class="il-card">
-      <div class="il-card-head">
-        <div class="il-card-icon icon-g">🔬</div>
-        <div><div class="il-card-name">MemCurator</div><div class="il-card-sub">Gobernanza autónoma</div></div>
-      </div>
-      <div class="cur-row"><span class="cur-k">Última curation</span><span class="cur-v">${curatorData.lastRun}</span></div>
-      <div class="cur-row"><span class="cur-k">Auto-run</span><span class="cur-v">cada 10 ciclos</span></div>
-      <div class="cur-row"><span class="cur-k">TTL episódico</span><span class="cur-v">30 días</span></div>
-      <div class="cur-row"><span class="cur-k">Límite nodos</span><span class="cur-v">1,000</span></div>
-      <div class="cur-row"><span class="cur-k">Dedup threshold</span><span class="cur-v">92% Jaccard</span></div>
-      <div style="margin-top:10px;font-size:11px;color:var(--text3)">
-        <code style="color:#a5b4fc">akdd cure</code> — manual &nbsp;·&nbsp; <code style="color:#a5b4fc">akdd cure report</code> — preview
-      </div>
-    </div>
-  </div>
-
-  <div class="obs-panel">
-    <div class="obs-head">
-      <span style="font-size:18px">🗂️</span>
-      <span style="font-size:13px;font-weight:700;color:var(--text)">Obsidian MCP</span>
-      <span class="obs-badge">OPCIONAL</span>
-    </div>
-    <div class="obs-txt">Conecta tu vault de Obsidian como fuente humana de conocimiento. Tus notas fluyen al grafo sin hacer <code style="color:#a5b4fc">akdd knowledge</code> manual.</div>
-    <code class="obs-cmd">1. Instalar plugin "Obsidian MCP Server" en Obsidian → 2. Agregar el servidor MCP en Cursor/Claude Code → 3. La herramienta obsidian_read_notes queda disponible en el chat</code>
-    <div style="font-size:11px;color:var(--text3);margin-top:7px">Sin Obsidian: usa <code style="color:#a5b4fc">akdd knowledge</code> — mismo resultado.</div>
-  </div>
-
-</div>
-
 <script>
 const NODES = ${JSON.stringify(nodes)};
 const EDGES = ${JSON.stringify(edges)};
@@ -1483,21 +1293,6 @@ function setMode(mode,el){
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('mode-graph').style.display=mode==='graph'?'flex':'none';
-  const intelEl = document.getElementById('mode-intel');
-  const contentEl = document.querySelector('.content');
-  if(intelEl) {
-    if(mode === 'intel') {
-      if(contentEl) contentEl.style.display = 'none';
-      intelEl.style.display = 'flex';
-      intelEl.style.flex = '1';
-      intelEl.style.flexDirection = 'column';
-      intelEl.style.overflowY = 'auto';
-      intelEl.style.width = '100%';
-    } else {
-      if(contentEl) contentEl.style.display = 'flex';
-      intelEl.style.display = 'none';
-    }
-  }
   document.getElementById('mode-docs').style.display=mode==='docs'?'flex':'none';
   if(mode==='docs')setTimeout(renderModuleGraph,100);
 }
@@ -2028,25 +1823,173 @@ renderNodeList();
 renderGraph();
 </script>
 
+    <!-- ───────────────────────────────────────────────────────────────────
+         v3.3 PANELS: CONTRACT GUARD + CREATIVE ENGINE + CURATOR
+    ─────────────────────────────────────────────────────────────────────── -->
+
+    <style>
+    .v33-section { margin: 0 auto 32px; max-width: 1100px; padding: 0 24px; }
+    .v33-title { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #8d99ae; margin: 0 0 14px; }
+    .v33-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .v33-card { background: #1e2535; border: 1px solid #2e3550; border-radius: 12px; padding: 18px 20px; }
+    .v33-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .v33-card-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .icon-purple { background: rgba(127,119,221,0.15); }
+    .icon-green  { background: rgba(29,158,117,0.15); }
+    .icon-amber  { background: rgba(239,159,39,0.15); }
+    .v33-card-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .v33-card-sub   { font-size: 11px; color: #64748b; margin-top: 1px; }
+    .v33-stat-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+    .v33-stat { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px 12px; text-align: center; }
+    .v33-stat-val { font-size: 22px; font-weight: 800; line-height: 1.1; }
+    .v33-stat-label { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .val-purple { color: #9f99e8; }
+    .val-green  { color: #34d399; }
+    .val-amber  { color: #fbbf24; }
+    .val-red    { color: #f87171; }
+    .val-gray   { color: #94a3b8; }
+    .contract-list { display: flex; flex-direction: column; gap: 6px; }
+    .contract-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: rgba(255,255,255,0.03); border-radius: 7px; font-size: 12px; }
+    .contract-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+    .badge-protected { background: rgba(127,119,221,0.2); color: #9f99e8; }
+    .badge-verified  { background: rgba(29,158,117,0.2);  color: #34d399; }
+    .badge-candidate { background: rgba(239,159,39,0.2);  color: #fbbf24; }
+    .badge-invalid   { background: rgba(248,113,113,0.2); color: #f87171; }
+    .contract-name { flex: 1; color: #cbd5e1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .contract-module { font-size: 10px; color: #475569; }
+    .suggestion-row { display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px; background: rgba(255,255,255,0.03); border-radius: 7px; font-size: 12px; margin-bottom: 5px; }
+    .sug-type { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; background: rgba(239,159,39,0.15); color: #fbbf24; }
+    .sug-auto { background: rgba(29,158,117,0.15); color: #34d399; }
+    .sug-text { color: #94a3b8; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .level-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .level-indicator { height: 6px; flex: 1; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
+    .level-fill { height: 100%; border-radius: 3px; transition: width .6s; }
+    .curator-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+    .curator-row:last-child { border-bottom: none; }
+    .curator-key { color: #64748b; }
+    .curator-val { color: #94a3b8; font-weight: 600; }
+    .obsidian-panel { background: #1e2535; border: 1px solid #3730a3; border-radius: 12px; padding: 16px 20px; }
+    .obsidian-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .obsidian-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(99,91,255,0.15); color: #818cf8; font-weight: 600; }
+    .obsidian-text { font-size: 13px; color: #94a3b8; line-height: 1.5; }
+    .obsidian-cmd { font-family: monospace; font-size: 11px; background: rgba(255,255,255,0.05); color: #a5b4fc; padding: 6px 10px; border-radius: 6px; margin-top: 8px; display: block; }
+    @media(max-width:600px){ .v33-stat-row { grid-template-columns: repeat(2,1fr); } }
+    </style>
+
+    <div class="v33-section">
+      <div class="v33-title">Preservation Intelligence Layer — v3.3</div>
+      <div class="v33-grid">
+
+        <!-- CONTRACT GUARD -->
+        <div class="v33-card">
+          <div class="v33-card-header">
+            <div class="v33-card-icon icon-purple">🛡️</div>
+            <div><div class="v33-card-title">Contract Guard</div><div class="v33-card-sub">Lo que no se puede romper</div></div>
+          </div>
+          <div class="v33-stat-row">
+            <div class="v33-stat"><div class="v33-stat-val val-purple">${contractData.protected}</div><div class="v33-stat-label">Protected</div></div>
+            <div class="v33-stat"><div class="v33-stat-val val-green">${contractData.verified}</div><div class="v33-stat-label">Verified</div></div>
+            <div class="v33-stat"><div class="v33-stat-val val-amber">${contractData.candidate}</div><div class="v33-stat-label">Candidate</div></div>
+            <div class="v33-stat"><div class="v33-stat-val ${contractData.violations > 0 ? 'val-red' : 'val-gray'}">${contractData.violations}</div><div class="v33-stat-label">Violations</div></div>
+          </div>
+          ${contractData.recent && contractData.recent.length > 0 ? `
+          <div class="contract-list">
+            ${contractData.recent.map(c => `
+              <div class="contract-row">
+                <span class="contract-badge badge-${c.status}">${c.status.toUpperCase()}</span>
+                <span class="contract-name" title="${escHtml(c.name)}">${escHtml(c.name.substring(0,35))}</span>
+                <span class="contract-module">${escHtml(c.module)}</span>
+              </div>
+            `).join('')}
+          </div>` : `<div style="font-size:12px;color:#475569;text-align:center;padding:12px 0">Sin contratos todavía — corre más ciclos aa: para generarlos automáticamente</div>`}
+        </div>
+
+        <!-- CREATIVE ENGINE -->
+        <div class="v33-card">
+          <div class="v33-card-header">
+            <div class="v33-card-icon icon-amber">✨</div>
+            <div><div class="v33-card-title">Creative Engine</div><div class="v33-card-sub">Autonomía creativa dirigida</div></div>
+          </div>
+          <div class="level-bar">
+            <span style="font-size:11px;color:#64748b;white-space:nowrap">Nivel ${creativeData.level}</span>
+            <div class="level-indicator"><div class="level-fill" style="width:${(creativeData.level / 3 * 100).toFixed(0)}%;background:${creativeData.level >= 2 ? '#34d399' : '#fbbf24'}"></div></div>
+            <span style="font-size:11px;color:${creativeData.level >= 2 ? '#34d399' : '#fbbf24'};white-space:nowrap">${creativeData.level >= 2 ? 'CREATIVO' : 'ASISTIDO'}</span>
+          </div>
+          ${creativeData.level < 2 ? `<div style="font-size:11px;color:#475569;margin-bottom:10px">Faltan ${10 - (creativeData.protected_for_level2 || 0)} contratos verificados para Nivel 2</div>` : ''}
+          <div class="v33-stat-row">
+            <div class="v33-stat"><div class="v33-stat-val val-amber">${creativeData.suggestions}</div><div class="v33-stat-label">Pendientes</div></div>
+            <div class="v33-stat"><div class="v33-stat-val val-green">${creativeData.wins}</div><div class="v33-stat-label">Aplicadas</div></div>
+          </div>
+          ${creativeData.recent_suggestions && creativeData.recent_suggestions.length > 0 ? `
+          <div>
+            ${creativeData.recent_suggestions.map(s => `
+              <div class="suggestion-row">
+                <span class="sug-type ${s.auto_applicable ? 'sug-auto' : ''}">${s.type}</span>
+                <span class="sug-text" title="${escHtml(s.title)}">${escHtml(s.title.substring(0,50))}</span>
+              </div>
+            `).join('')}
+          </div>` : `<div style="font-size:12px;color:#475569;text-align:center;padding:8px 0">Sin sugerencias — se generan automáticamente cada ciclo</div>`}
+        </div>
+
+        <!-- MEM CURATOR -->
+        <div class="v33-card">
+          <div class="v33-card-icon icon-green" style="margin-bottom:14px;width:auto;height:auto;padding:0;display:flex;gap:10px;align-items:center;background:none">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(29,158,117,0.15);display:flex;align-items:center;justify-content:center;font-size:16px">🔬</div>
+            <div><div class="v33-card-title">MemCurator</div><div class="v33-card-sub">Gobernanza autónoma de memoria</div></div>
+          </div>
+          <div class="curator-row"><span class="curator-key">Última curation</span><span class="curator-val">${curatorData.lastRun}</span></div>
+          <div class="curator-row"><span class="curator-key">Ciclos para auto-run</span><span class="curator-val">cada 10</span></div>
+          <div class="curator-row"><span class="curator-key">TTL episódico</span><span class="curator-val">30 días</span></div>
+          <div class="curator-row"><span class="curator-key">Límite nodos activos</span><span class="curator-val">1,000</span></div>
+          <div class="curator-row"><span class="curator-key">Dedup threshold</span><span class="curator-val">92% Jaccard</span></div>
+          <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:11px;color:#64748b">
+            <code style="color:#a5b4fc">akdd cure</code> — curation manual<br>
+            <code style="color:#a5b4fc">akdd cure report</code> — preview sin cambios
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- OBSIDIAN MCP OPTIONAL CONNECTOR -->
+    <div class="v33-section">
+      <div class="v33-title">Conector opcional — Obsidian MCP</div>
+      <div class="obsidian-panel">
+        <div class="obsidian-header">
+          <span style="font-size:20px">🗂️</span>
+          <div style="flex:1">
+            <span style="font-size:14px;font-weight:700;color:#e2e8f0">Obsidian como fuente humana</span>
+            <span class="obsidian-badge" style="margin-left:8px">OPCIONAL</span>
+          </div>
+        </div>
+        <div class="obsidian-text">
+          Si usas Obsidian, el plugin MCP conecta tu vault directamente con Agentic KDD.<br>
+          Tus notas personales, decisiones y gotchas fluyen al grafo automáticamente — sin hacer <code style="color:#a5b4fc">akdd knowledge</code> manual.
+        </div>
+        <code class="obsidian-cmd">1. Instalar plugin "Obsidian MCP Server" en Obsidian<br>2. En Claude Code/Cursor: agrega el servidor MCP del plugin<br>3. La herramienta obsidian_read_notes queda disponible en el chat</code>
+        <div style="font-size:11px;color:#475569;margin-top:8px">Sin Obsidian instalado: usa <code style="color:#a5b4fc">akdd knowledge</code> normalmente — mismo resultado.</div>
+      </div>
+    </div>
+
   </body>
 </html>`;
 
-const server = require('http').createServer((req, res) => {
+const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(HTML);
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, () => {
   const url = `http://localhost:${PORT}`;
-  console.log(`\n  Agentic KDD Dashboard v4`);
-  console.log(`  → ${url}\n`);
-  // Open browser
-  const { exec } = require('child_process');
-  const cmd = process.platform === 'win32' ? `start "" "${url}"`
-            : process.platform === 'darwin' ? `open "${url}"`
-            : `xdg-open "${url}"`;
-  exec(cmd, (err) => {
-    if (err) console.log(`  Open manually: ${url}`);
-  });
-  console.log('  Press Ctrl+C to stop\n');
+  console.log('\n  \x1b[34mAgentic KDD Dashboard v4\x1b[0m');
+  console.log(`  Project: ${config.nombre}`);
+  console.log(`  Nodes: ${stats.total} | Divine: ${stats.godNodes} | Surprising: ${stats.surprising} | HIGH: ${stats.high}`);
+  console.log(`\n  \x1b[36m→ ${url}\x1b[0m\n`);
+  console.log('  Ctrl+C to stop\n');
+  try {
+    const cmd = process.platform === 'win32' ? `start ${url}` : process.platform === 'darwin' ? `open ${url}` : `xdg-open ${url}`;
+    require('child_process').execSync(cmd, { stdio: 'ignore' });
+  } catch {}
 });
+
+process.on('SIGINT', () => { server.close(); console.log('\n  Stopped.\n'); process.exit(0); });

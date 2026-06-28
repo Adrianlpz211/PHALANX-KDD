@@ -102,13 +102,15 @@ function checkAgainstMemory(db, changes) {
     nodes.forEach(node => {
       const content = (node.titulo + ' ' + node.contenido).toLowerCase();
 
+      // El valor objetivo puede venir como change.to ("de N a M") o change.value ("X = N" / businessFields)
+      const target = change.to != null ? change.to : change.value;
       // Check if memory contains a specific value for this field
       const valueInMemory = content.match(new RegExp(`${fieldLower}[^\\d]*(\\d+)`, 'i'));
-      if (valueInMemory && change.to && valueInMemory[1] !== change.to) {
+      if (valueInMemory && target != null && valueInMemory[1] !== String(target)) {
         violations.push({
           field:       change.field,
           from:        change.from,
-          to:          change.to,
+          to:          target,
           memory_says: valueInMemory[1],
           node_id:     node.id,
           confidence:  node.confianza,

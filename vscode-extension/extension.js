@@ -16,7 +16,7 @@
 const vscode  = require('vscode');
 const path    = require('path');
 const fs      = require('fs');
-const { execSync } = require('child_process');
+const { execSync, execFileSync, execFile } = require('child_process');
 
 // ─── ACTIVATE ────────────────────────────────────────────────────────────────
 
@@ -146,11 +146,12 @@ function activate(context) {
         if (fp.indexOf('node_modules') >= 0 || fp.indexOf('.agentic') >= 0) return;
         try {
           var rel = path.relative(projectRoot, fp);
-          execSync(
-            'node .agentic/grafo/ast-indexer.cjs index "' + path.dirname(rel) + '"',
-            { cwd: projectRoot, timeout: 10000, stdio: 'ignore' }
+          // Async (execFile, sin shell): no congela la UI de VS Code en cada guardado
+          execFile(
+            'node', ['.agentic/grafo/ast-indexer.cjs', 'index', path.dirname(rel)],
+            { cwd: projectRoot, timeout: 10000 },
+            function() { try { provider.refresh(); } catch(e) {} }
           );
-          provider.refresh();
         } catch(e) {}
       })
     );
@@ -222,22 +223,25 @@ AgenticSidebarProvider.prototype._getStats = function() {
   s.installed = true;
 
   try {
-    var res = execSync(
-      'node -e "try{' +
-      'var D=require(\'better-sqlite3\');' +
-      'var db=new D(\'' + db.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\',{readonly:true});' +
-      'var r={' +
-        'n:db.prepare(\'SELECT COUNT(*) as n FROM nodos WHERE estado=\\\'ACTIVO\\\'\').get().n,' +
-        'h:db.prepare(\'SELECT COUNT(*) as n FROM nodos WHERE confianza=\\\'ALTA\\\' AND estado=\\\'ACTIVO\\\'\').get().n,' +
-        'c:0,p:0,v:0' +
-      '};' +
-      'try{r.c=db.prepare(\'SELECT COUNT(*) as n FROM ciclos\').get().n}catch(e){}' +
-      'try{r.p=db.prepare(\'SELECT COUNT(*) as n FROM verified_contracts WHERE status=\\\'protected\\\'\').get().n}catch(e){}' +
-      'try{r.v=db.prepare(\'SELECT COUNT(*) as n FROM contract_violations WHERE recovered=0\').get().n}catch(e){}' +
-      'process.stdout.write(JSON.stringify(r));db.close()' +
-      '}catch(e){process.stdout.write(JSON.stringify({n:0,h:0,c:0,p:0,v:0}))}"',
-      { cwd: root, timeout: 5000, stdio: 'pipe' }
-    ).toString().trim();
+    // La ruta de la DB se pasa por env var (AKDD_DB), NUNCA interpolada en el código,
+    // y se usa execFileSync (sin shell) → elimina inyección de comando y de código.
+    var script = "try{" +
+      "var D=require('better-sqlite3');" +
+      "var db=new D(process.env.AKDD_DB,{readonly:true});" +
+      "var r={" +
+        "n:db.prepare('SELECT COUNT(*) as n FROM nodos WHERE estado=\\'ACTIVO\\'').get().n," +
+        "h:db.prepare('SELECT COUNT(*) as n FROM nodos WHERE confianza=\\'ALTA\\' AND estado=\\'ACTIVO\\'').get().n," +
+        "c:0,p:0,v:0" +
+      "};" +
+      "try{r.c=db.prepare('SELECT COUNT(*) as n FROM ciclos').get().n}catch(e){}" +
+      "try{r.p=db.prepare('SELECT COUNT(*) as n FROM verified_contracts WHERE status=\\'protected\\'').get().n}catch(e){}" +
+      "try{r.v=db.prepare('SELECT COUNT(*) as n FROM contract_violations WHERE recovered=0').get().n}catch(e){}" +
+      "process.stdout.write(JSON.stringify(r));db.close()" +
+      "}catch(e){process.stdout.write(JSON.stringify({n:0,h:0,c:0,p:0,v:0}))}";
+    var res = execFileSync('node', ['-e', script], {
+      cwd: root, timeout: 5000, stdio: 'pipe',
+      env: Object.assign({}, process.env, { AKDD_DB: db })
+    }).toString().trim();
 
     var parsed = JSON.parse(res);
     s.nodes      = parsed.n || 0;

@@ -93,6 +93,7 @@ function createAdapter(dbPath) {
       transaction: (fn) => db.transaction(fn),
       pragma: (p) => { try { db.pragma(p); } catch(e) {} },
       close: () => { try { db.close(); } catch(e) {} },
+      prepare: (sql) => db.prepare(sql),
       type: 'better-sqlite3'
     };
   }
@@ -107,6 +108,7 @@ function createAdapter(dbPath) {
       transaction: (fn) => (...args) => { try { fn(...args); } catch(e) {} },
       pragma: () => {},
       close: () => { try { db.close(); } catch(e) {} },
+      prepare: (sql) => db.prepare(sql),
       type: 'node-sqlite'
     };
   }
@@ -154,6 +156,12 @@ function createAdapter(dbPath) {
       transaction: (fn) => (...args) => { fn(...args); saveDB(); },
       pragma: () => {}, // no-op en sql.js
       close: () => saveDB(),
+      // shim de statement para consumidores que usan db.prepare(sql).run/get/all
+      prepare: (sql) => ({
+        run: (...params) => { runSQL(sql, params.flat()); saveDB(); },
+        get: (...params) => getSQL(sql, ...params),
+        all: (...params) => allSQL(sql, ...params),
+      }),
       type: 'sqljs',
       save: saveDB
     };
@@ -279,11 +287,19 @@ function snapshotMemoria(db) {
 // ─── PARSEAR ENTRADAS ─────────────────────────────────────────────────────────
 function parsearEntradas(contenido, tipo) {
   const entradas = [];
+  // Remover bloques de comentario HTML (plantillas/ejemplos) ANTES de partir:
+  // sus encabezados `## ` internos NO deben generar nodos fantasma.
+  contenido = contenido.replace(/<!--[\s\S]*?-->/g, '');
+  // Una entrada real SIEMPRE tiene al menos un campo estructurado. Este criterio
+  // positivo descarta headers de archivo (#), secciones de scaffolding
+  // (Registro / Patrones activos / Ejemplos…) y cualquier texto suelto, sin
+  // depender de una lista frágil de prefijos a excluir.
+  const CAMPO_RE = /^(Área|Area|Confianza|Estado|Aplicado|Útil|Util|Prioridad|Error|Síntoma|Sintoma|Causa|Solución|Solucion|Regla|Razón|Razon|Decisión|Decision|Contexto|Aplica a):/m;
   const secciones = contenido.split(/^## /m).filter(s => {
     const t = s.trim();
-    return t && !t.startsWith('<!--') && !t.startsWith('Cómo') &&
-      !t.startsWith('Formato') && !t.startsWith('Registro') &&
-      !t.startsWith('Patrones') && t.length > 10;
+    if (!t || t.length < 10) return false;
+    if (t.startsWith('#')) return false;   // header de archivo / preámbulo
+    return CAMPO_RE.test(s);               // sólo secciones con campos reales
   });
   for (const sec of secciones) {
     const lineas = sec.split('\n');
@@ -628,13 +644,29 @@ function cosineSim(a,b) {
   return dot/(Math.sqrt(na)*Math.sqrt(nb)||1);
 }
 
+// ─── Indexado automático de embeddings (búsqueda vectorial real) ──────────────
+// Corre en cada `akdd sync`. Incremental: tras el primer run solo embebe nodos
+// nuevos/cambiados. La promesa sin await mantiene vivo el event loop (inferencia
+// async) hasta terminar, así el proceso no sale antes de persistir.
+async function _autoIndexEmbeddings() {
+  try {
+    const embMod = getEmbeddingsModuleGrafo();
+    if (!embMod || typeof embMod.isAvailable !== 'function' || !embMod.isAvailable()) return;
+    const db = initDB();
+    const r = await embMod.indexarPendientes(db, 30);
+    if (r && r.indexados > 0) console.error(`[EMBEDDINGS] ${r.indexados} nodo(s) indexado(s) para búsqueda vectorial`);
+    if (db.save) db.save();
+    db.close();
+  } catch {}
+}
+
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 const cmd  = process.argv[2]||'sync';
 const arg1 = process.argv[3];
 const arg2 = process.argv[4];
 
 switch(cmd) {
-  case 'sync':     sincronizar(); break;
+  case 'sync':     sincronizar(); _autoIndexEmbeddings(); break;
   case 'sync-stats':
     sincronizar();
     stats();
@@ -1464,22 +1496,22 @@ if (_args[0] === 'embed-status') {
   if (!embMod) {
     console.log('  Estado: módulo embeddings.cjs no encontrado');
     console.log('  Solución: akdd update\n');
-  } else if (!embMod.isAvailable()) {
-    console.log('  Estado: @xenova/transformers no instalado');
-    console.log('  Modelo: all-MiniLM-L6-v2 (23MB, 100% offline)');
-    console.log('  Instalar: akdd embed-install\n');
   } else {
-    console.log('  Estado: ✓ disponible');
-    console.log(`  Modelo: ${embMod.MODELO}`);
-    console.log(`  Dimensiones: ${embMod.DIM}`);
-    console.log('  Búsqueda: vectorial híbrida (RRF)\n');
+    embMod.getStatus(ROOT).then((s) => {
+      const ok = s.active_model && s.active_model !== 'none';
+      console.log(`  Estado: ${ok ? '✓ disponible' : 'sin modelo'}`);
+      console.log(`  Modelo: ${s.active_model}`);
+      console.log(`  Tipo:   ${s.model_type}`);
+      console.log(`  Dimensiones: ${s.dims}`);
+      console.log(`  Instalar: ${s.install_command}\n`);
+    }).catch((e) => console.error('  Error:', e.message));
   }
 }
 
 if (_args[0] === 'embed-install') {
   const embMod = getEmbeddingsModuleGrafo();
   if (!embMod) { console.log('\n  akdd update primero\n'); process.exit(1); }
-  embMod.instalar();
+  embMod.installMini(ROOT).catch((e) => { console.error(e.message); process.exitCode = 1; });
 }
 
 // ─── v2.2: Lazy loaders de módulos (sin romper arranque si no existen) ────────
@@ -1755,18 +1787,18 @@ function _autoRunCurator() {
     // Contar ciclos desde última curation
     let lastCuration = 0;
     try {
-      const meta = db.prepare("SELECT valor FROM metadata WHERE clave='last_curator_cycle'").get();
+      const meta = db.get("SELECT valor FROM metadata WHERE clave='last_curator_cycle'");
       lastCuration = parseInt(meta?.valor || '0');
     } catch {}
-    const totalCycles = db.prepare("SELECT COUNT(*) as n FROM ciclos").get()?.n || 0;
+    const totalCycles = db.get("SELECT COUNT(*) as n FROM ciclos")?.n || 0;
     if (totalCycles - lastCuration >= 10) {
       const { runCuration } = require(require('path').join(_grafoPath, 'mem-curator.cjs'));
       runCuration(process.cwd());
       try {
-        db.prepare("INSERT OR REPLACE INTO metadata (clave, valor) VALUES ('last_curator_cycle', ?)").run(String(totalCycles));
+        db.run("INSERT OR REPLACE INTO metadata (clave, valor) VALUES ('last_curator_cycle', ?)", String(totalCycles));
       } catch {
-        try { db.prepare("CREATE TABLE IF NOT EXISTS metadata (clave TEXT PRIMARY KEY, valor TEXT)").run(); } catch {}
-        try { db.prepare("INSERT OR REPLACE INTO metadata (clave, valor) VALUES ('last_curator_cycle', ?)").run(String(totalCycles)); } catch {}
+        try { db.run("CREATE TABLE IF NOT EXISTS metadata (clave TEXT PRIMARY KEY, valor TEXT)"); } catch {}
+        try { db.run("INSERT OR REPLACE INTO metadata (clave, valor) VALUES ('last_curator_cycle', ?)", String(totalCycles)); } catch {}
       }
     }
     if (db.save) db.save(); db.close();
@@ -1840,7 +1872,7 @@ module.exports = { ..._contractCreativeExports };
 function _autoSessionGuard() {
   try {
     const db = initDB();
-    const cycles = db.prepare("SELECT COUNT(*) as n FROM ciclos").get()?.n || 0;
+    const cycles = db.get("SELECT COUNT(*) as n FROM ciclos")?.n || 0;
     if (cycles > 0 && cycles % 5 === 0) {
       const { generateCheckpoint } = require(require('path').join(__dirname, 'session-guard.cjs'));
       generateCheckpoint(process.cwd());
@@ -1905,9 +1937,9 @@ function _autoKDDMemorySync() {
   try {
     const { syncFTS } = require(require('path').join(__dirname, 'kdd-memory.cjs'));
     const db = initDB();
-    const nodeCount = db.prepare("SELECT COUNT(*) as n FROM nodos WHERE estado='ACTIVO'").get()?.n || 0;
+    const nodeCount = db.get("SELECT COUNT(*) as n FROM nodos WHERE estado='ACTIVO'")?.n || 0;
     let ftsCount = 0;
-    try { ftsCount = db.prepare("SELECT COUNT(*) as n FROM nodos_fts").get()?.n || 0; } catch {}
+    try { ftsCount = db.get("SELECT COUNT(*) as n FROM nodos_fts")?.n || 0; } catch {}
     if (ftsCount < nodeCount * 0.9) {
       syncFTS(db);
       console.error('[KDD-MEMORY] FTS index synced');
@@ -1936,3 +1968,90 @@ if (_origSyncKDM && typeof _origSyncKDM === 'function') {
   };
 }
 module.exports = { ..._kdmExports };
+
+// ─── v3.6: project_settings — config persistente en BD ──────────────────────
+// Guarda CONFIGURADO, nombre, stack y test command en memoria.db
+// Fuente de verdad secundaria cuando config.md falla o se pisa durante update
+
+(function migrateProjectSettings() {
+  try {
+    const _db = initDB();
+
+    // Crear tabla project_settings si no existe
+    _db.exec(`
+      CREATE TABLE IF NOT EXISTS project_settings (
+        key        TEXT PRIMARY KEY,
+        value      TEXT NOT NULL,
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Leer config.md y sincronizar a BD si CONFIGURADO: SI
+    const fs   = require('fs');
+    const path = require('path');
+    const configPath = path.join(process.cwd(), '.agentic', 'config.md');
+
+    if (fs.existsSync(configPath)) {
+      const config = fs.readFileSync(configPath, 'utf8');
+      const configured = /^CONFIGURADO:\s*SI/m.test(config);
+
+      if (configured) {
+        // Guardar estado en BD
+        const _UPSERT_PS = `
+          INSERT INTO project_settings (key, value, updated_at)
+          VALUES (?, ?, datetime('now'))
+          ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+        `;
+
+        _db.run(_UPSERT_PS, 'configured', 'true');
+
+        const nameMatch = config.match(/^Nombre:\s*(.+)$/m);
+        if (nameMatch) _db.run(_UPSERT_PS, 'project_name', nameMatch[1].trim());
+
+        const testMatch = config.match(/^\s*test:\s*(.+)$/m);
+        if (testMatch && testMatch[1].trim() !== '—') {
+          _db.run(_UPSERT_PS, 'test_command', testMatch[1].trim());
+        }
+
+        const stackBlock = config.match(/^## Stack\n([\s\S]+?)(?=\n##|$)/m);
+        if (stackBlock) _db.run(_UPSERT_PS, 'stack', stackBlock[1].trim());
+      }
+    } else {
+      // config.md no existe — intentar restaurar desde BD
+      const settings = {};
+      try {
+        const rows = _db.all('SELECT key, value FROM project_settings');
+        for (const row of rows) settings[row.key] = row.value;
+      } catch {}
+
+      if (settings.configured === 'true' && fs.existsSync(path.join(process.cwd(), '.agentic'))) {
+        // Reconstruir config.md mínimo desde BD
+        const lines = [
+          '# Agentic KDD — Configuración del proyecto',
+          'CONFIGURADO: SI',
+          'VERSION: 2.0',
+          '',
+          '## Proyecto',
+          `Nombre: ${settings.project_name || '(restaurado desde BD)'}`,
+          'Descripción: —',
+          'Tipo: EXISTENTE',
+          '',
+          settings.stack ? `## Stack\n${settings.stack}` : '## Stack\n—',
+          '',
+          '## Comando de tests',
+          settings.test_command ? `test: ${settings.test_command}` : 'test: —',
+        ];
+        fs.writeFileSync(configPath, lines.join('\n'), 'utf8');
+        console.error('[AGENTIC] config.md restaurado desde memoria.db');
+      }
+    }
+
+    if (_db.save) _db.save();
+    _db.close();
+  } catch(e) {
+    // Silent — best effort
+  }
+})();
+
+const _ps36Exports = module.exports || {};
+module.exports = { ..._ps36Exports };

@@ -130,12 +130,9 @@ function detectLanguage(filePath) {
 // ─── HASH HELPER ──────────────────────────────────────────────────────────────
 
 function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return hash.toString(16);
+  // SHA-256 real (antes era un hash polinómico de 32 bits con riesgo de colisión,
+  // lo que podía saltar el reindexado de un archivo modificado en el cache check)
+  return require('crypto').createHash('sha256').update(String(str)).digest('hex');
 }
 
 // ─── EXTRACCIÓN REGEX (FALLBACK) ──────────────────────────────────────────────
