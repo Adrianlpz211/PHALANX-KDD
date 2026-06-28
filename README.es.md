@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/Agentic_KDD-v2.2-8b5cf6?style=for-the-badge&labelColor=0a0d14" alt="version"/>
+<img src="https://img.shields.io/badge/Agentic_KDD-v3.6.0-8b5cf6?style=for-the-badge&labelColor=0a0d14" alt="version"/>
 
 # 🧠 Agentic KDD
 
@@ -375,7 +375,7 @@ El STOP no es un fracaso. Es el sistema siendo honesto.
 ```
 L1  Re-explicas todo en cada sesión
 L2  Memoria básica — recuerda algunas cosas
-L3  ← Agentic KDD v2.2
+L3  ← Agentic KDD v3.6.0
         Previene fallos antes de que ocurran
         Aprende del CI/CD automáticamente
         Contexto semántico siempre cargado

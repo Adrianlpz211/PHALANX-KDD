@@ -1,0 +1,14 @@
+# Datos del proyecto y caché de modelos — NUNCA publicar
+.agentic/memoria.db
+.agentic/.model_cache/
+
+# Documentos internos de auditoría / archivos rotos renombrados
+_AUDITORIA-COMPLETA.md
+_CORRECCIONES-claude.md
+*.ROTO*
+
+# Empaquetados, tooling de repo y artefactos no necesarios en el paquete instalado
+*.zip
+scripts/
+.github/
+vscode-extension/

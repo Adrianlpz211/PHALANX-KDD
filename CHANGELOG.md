@@ -1,5 +1,21 @@
 # Changelog — Agentic KDD
 
+## [3.6.0] — 2026-06-28
+
+### Auditoría completa + endurecimiento del motor
+- **30+ bugs reparados** tras auditoría de los 48 archivos del motor (8 sesiones):
+  5 críticos (db.prepare sobre el adapter, bin roto, dispatcher MCP, inyección),
+  14 altos (Spec Gate inerte, TDD Gate con PASS falso, métricas en 0, etc.) y
+  ~10 medios/bajos.
+- **Búsqueda vectorial real** — `indexarPendientes` ahora embebe y persiste los
+  vectores; `akdd buscar` rankea por similitud coseno real (antes degradaba a texto).
+- **Fuente única del motor** — consolidado todo en `.agentic/grafo/`; eliminada la
+  copia muerta `src/grafo.cjs` y el directorio duplicado `grafo/`.
+- **Higiene de publicación** — `.npmignore` (no se filtra `memoria.db`) + hook
+  `prepublishOnly` que bloquea publicaciones con el motor viejo o versión descuadrada.
+- **Parser de memoria** — `parsearEntradas` ya no crea nodos fantasma desde headers
+  ni comentarios de plantilla.
+
 ## [2.1.0] — 2026-06-18
 
 ### Nuevas funcionalidades
