@@ -360,6 +360,14 @@ function runSelfHealingLoop(opts) {
         const contractGuardPath = require('path').join(__dirname, 'contract-guard.cjs');
         const cg = require(contractGuardPath);
         const dbPath = require('path').join(projectRoot || process.cwd(), '.agentic/memoria.db');
+        // Add project node_modules to require path so better-sqlite3 can be found
+        const projNodeModules = require('path').join(projectRoot || process.cwd(), 'node_modules');
+        if (!require.resolve.paths('better-sqlite3').includes(projNodeModules)) {
+          require('module').Module._nodeModulePaths(projNodeModules).forEach(p => {
+            if (!require.resolve.paths('').includes(p)) require.resolve.paths('').push(p);
+          });
+          module.paths.unshift(projNodeModules);
+        }
         const DB = (() => {
           try { return new (require('better-sqlite3'))(dbPath); } catch { return null; }
         })();
