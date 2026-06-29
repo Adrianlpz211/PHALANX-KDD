@@ -103,9 +103,122 @@ akdd dashboard             # visual board at localhost:3847
 akdd health                # system diagnostics
 ```
 
-It also exposes **23 MCP tools** for compatible clients (Claude Code, Cursor, any stdio MCP client).
+It also exposes **60 MCP tools** for compatible clients (Claude Code, Cursor, any stdio MCP client).
 
 > The command vocabulary (`aa:`, `audit:`, `akdd buscar`…) is in Spanish — the task you write after `aa:` can be in any language.
+
+---
+
+## Full CLI reference
+
+### Setup & lifecycle
+```bash
+akdd init                      # Deploy Agentic KDD in a new project
+akdd onboard                   # Onboard an existing (brownfield) project
+akdd update                    # Update the engine from GitHub (memory stays intact)
+akdd sync                      # Sync memory + knowledge graph
+akdd mcp                       # (Re)configure MCP for Cursor / Claude Code
+akdd health [--fix]            # System diagnostics (--fix repairs what it can)
+akdd dashboard                 # Visual board at localhost:3847
+```
+
+### Memory & knowledge graph
+```bash
+akdd buscar "query"            # Hybrid semantic + BM25 search across memory
+akdd recall "query"            # Recall relevant memory for a task
+akdd graph                     # Knowledge graph summary
+akdd stats                     # Memory statistics
+akdd why <file|entity>         # Why does this exist — decision trail
+akdd trail <id>                # Full decision trail for an entity
+akdd forget <id> "<reason>"    # Remove a memory node (audited)
+akdd decay                     # Apply time-decay to stale nodes
+akdd cure [run|report]         # MemCurator — autonomous memory governance
+akdd memory                    # Memory overview
+```
+
+### Contracts & gates (Preservation Layer)
+```bash
+akdd contracts                 # Contract Guard status (protected/verified/candidate)
+akdd contracts gate            # Run the contract gate manually
+akdd validate                  # Validate knowledge consistency
+akdd predict <file>            # Predict regression risk before editing
+akdd impacto <file|module>     # Impact analysis — what breaks if this changes
+akdd ast-impact <file>         # AST-level impact analysis
+```
+
+### Creative Engine
+```bash
+akdd creative suggest          # Generate improvement suggestions
+akdd creative apply <id>       # Apply a suggestion
+akdd creative dismiss <id>     # Dismiss a suggestion
+akdd creative level            # Show autonomy level (assisted → autonomous)
+akdd creative wins             # Show applied improvements
+akdd creative stats            # Creative Engine statistics
+```
+
+### AST & code intelligence
+```bash
+akdd ast index [target]        # Index the codebase (symbols, dependencies)
+akdd ast stats                 # AST index statistics
+akdd ast symbols <file>        # List symbols in a file
+akdd git-context               # Current git context for the agent
+```
+
+### QA / Audit department
+```bash
+akdd audit                     # Memory audit report (QA department)
+audit: auditar                 # Full project audit (in-chat)
+audit: seguridad               # Security audit — secrets, auth, multi-tenant
+akdd telemetry                 # Telemetry report
+akdd report                    # Effectiveness report
+akdd metrics                   # Project metrics
+```
+
+### Multi-instance (Lock Manager)
+```bash
+akdd locks                     # Lock status — who owns what
+akdd locks acquire --module=X  # Acquire a module lock
+akdd locks release --module=X  # Release a module lock
+akdd locks check --files=...   # Check if files are locked
+akdd locks acquire-schema      # Acquire the schema lock (before migrations)
+akdd locks release-schema      # Release the schema lock
+akdd locks wait --module=X     # Block until a module is free
+akdd locks release-all         # Release all locks (session cleanup)
+```
+
+### Collaboration (team sync)
+```bash
+akdd collab init               # Initialize a shared collab space
+akdd collab invite             # Generate an invite code
+akdd collab join <code>        # Join a teammate's collab space
+akdd collab push               # Push your memory to the shared space
+akdd collab pull               # Pull teammates' memory
+akdd collab status             # Collaboration status
+```
+
+### Specs & planning
+```bash
+akdd spec create <module>      # Create a spec for a module
+akdd spec                      # List specs
+akdd sprint-plan               # Plan a multi-phase sprint
+akdd benchmarks                # Run / view benchmarks
+akdd checkpoint                # Create a session checkpoint
+```
+
+### Embeddings (semantic search)
+```bash
+akdd embed-status              # Embedding index status
+akdd embed-install             # Install embedding support
+akdd jina-install              # Install jina-embeddings-v2 model (heavy download)
+```
+
+### CI/CD
+```bash
+akdd ci-install                # Install CI integration
+akdd ci-status                 # CI status
+akdd ci-report                 # CI report
+akdd llms                      # Generate llms.txt + knowledge-graph.json
+```
 
 ---
 
