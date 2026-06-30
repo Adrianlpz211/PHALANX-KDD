@@ -5,7 +5,7 @@
 ### The armor for your AI coder.
 
 <p>
-<img src="https://img.shields.io/badge/version-3.6.0-3FE2E8?style=for-the-badge&labelColor=0A0E14" alt="version"/>
+<img src="https://img.shields.io/badge/version-3.8.1-3FE2E8?style=for-the-badge&labelColor=0A0E14" alt="version"/>
 <img src="https://img.shields.io/badge/license-MIT-D9A33C?style=for-the-badge&labelColor=0A0E14" alt="license"/>
 <img src="https://img.shields.io/badge/Claude_Code_·_Cursor-ready-8A97A6?style=for-the-badge&labelColor=0A0E14" alt="compat"/>
 </p>
@@ -103,7 +103,7 @@ akdd dashboard             # visual board at localhost:3847
 akdd health                # system diagnostics
 ```
 
-It also exposes **60 MCP tools** for compatible clients (Claude Code, Cursor, any stdio MCP client).
+It also exposes **54 MCP tools** for compatible clients (Claude Code, Cursor, any stdio MCP client).
 
 > The command vocabulary (`aa:`, `audit:`, `akdd buscar`…) is in Spanish — the task you write after `aa:` can be in any language.
 

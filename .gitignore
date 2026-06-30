@@ -14,5 +14,8 @@ vendor/
 .agentic/memoria.db
 .agentic/.model_cache/
 
+# Credenciales del modo colaborativo (URL + token de Turso) — NUNCA subir
+.agentic/collab.json
+
 # Artefactos de auditoría / archivos rotos renombrados — internos, NO publicar
 *.ROTO*

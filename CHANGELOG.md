@@ -1,5 +1,19 @@
 # Changelog — Agentic KDD
 
+## [3.8.1] — 2026-06-30
+
+### Alineación de documentación + endurecimiento de collab (cosmético/seguridad)
+- **Versión unificada a 3.8.1** en `package.json` y badges de ambos READMEs (antes el
+  README inglés estaba congelado en 3.6.0).
+- **Conteo de herramientas MCP unificado a 54** (real, verificado contra el servidor en vivo)
+  en README EN/ES (antes 60 vs 23).
+- **`AGENTS.md`**: "28 módulos" → 38 reales; ruta `grafo/` → `.agentic/grafo/`.
+- **`mcp-server.cjs`**: `serverInfo.version` 2.0.0 → 3.8.1.
+- **Seguridad collab**: `.agentic/collab.json` (URL + token de Turso) ahora está en
+  `.gitignore` del repo (defensa en profundidad). El provisioner del modo colaborativo es
+  configurable por entorno (`AKDD_COLLAB_PROVISIONER_URL`) y admite auth opcional
+  (`AKDD_COLLAB_AUTH` → `Authorization: Bearer`), backward-compatible.
+
 ## [3.8.0] — 2026-06-30
 
 ### Onboarding automático de proyectos existentes + AST automático

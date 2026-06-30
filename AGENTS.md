@@ -15,7 +15,7 @@ This project uses **Agentic KDD (Knowledge-Driven Development)** — a framework
 
 The `.agentic/` directory contains:
 - `memoria.db` — SQLite knowledge graph (patterns, errors, decisions, causal edges)
-- `grafo/` — 28 Node.js modules (memory, AST, pipeline, preservation, telemetry)
+- `.agentic/grafo/` — 38 Node.js modules (memory, AST, pipeline, preservation, telemetry)
 - `agentes/` — agent instructions per role
 - `telemetria/` — append-only JSONL execution traces (L4 audit requirement)
 - `checkpoint.md` — session continuity across chat resets
