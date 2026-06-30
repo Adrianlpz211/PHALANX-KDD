@@ -494,7 +494,7 @@ rl.on('line', async (line) => {
       sendResponse(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'agentic-kdd', version: '2.0.0' },
+        serverInfo: { name: 'agentic-kdd', version: '3.8.0' },
       });
     } else if (method === 'tools/list') {
       sendResponse(id, {

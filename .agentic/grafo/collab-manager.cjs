@@ -21,8 +21,21 @@ const path = require('path');
 const os   = require('os');
 const { execSync } = require('child_process');
 
-// URL de tu Cloudflare Worker — actualizar después de deploy
-const PROVISIONER_URL = 'https://agentic-collab.adrianlpz-game.workers.dev';
+// URL del Cloudflare Worker que provisiona las DBs de Turso.
+// Configurable por entorno para poder rotar/proteger el endpoint sin tocar código.
+// Si no se define AKDD_COLLAB_PROVISIONER_URL, usa el default (comportamiento actual).
+const PROVISIONER_URL = process.env.AKDD_COLLAB_PROVISIONER_URL || 'https://agentic-collab.adrianlpz-game.workers.dev';
+
+// Token opcional de autenticación al provisioner. Si el Worker exige auth, define
+// AKDD_COLLAB_AUTH en el entorno y se enviará como "Authorization: Bearer ...".
+// Vacío por defecto → no cambia el comportamiento actual.
+const PROVISIONER_AUTH = process.env.AKDD_COLLAB_AUTH || '';
+
+function provisionerHeaders() {
+  const h = { 'Content-Type': 'application/json' };
+  if (PROVISIONER_AUTH) h['Authorization'] = `Bearer ${PROVISIONER_AUTH}`;
+  return h;
+}
 
 const COLLAB_CONFIG_PATH = '.agentic/collab.json';
 
@@ -130,7 +143,7 @@ async function collabInit(projectRoot) {
   try {
     const response = await fetch(PROVISIONER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: provisionerHeaders(),
       body: JSON.stringify({ projectId }),
     });
 
@@ -197,7 +210,7 @@ async function collabJoin(projectRoot, urlOrCode, token) {
     try {
       const response = await fetch(`${PROVISIONER_URL}/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: provisionerHeaders(),
         body: JSON.stringify({ code: urlOrCode }),
       });
       const result = await response.json();
@@ -254,7 +267,7 @@ async function collabInvite(projectRoot) {
   try {
     const response = await fetch(`${PROVISIONER_URL}/invite`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: provisionerHeaders(),
       body: JSON.stringify({ projectId }),
     });
     result = await response.json();
